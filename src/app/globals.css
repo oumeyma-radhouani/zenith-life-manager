@@ -1,5 +1,16 @@
 @import "tailwindcss";
 
+/* Force harsh, retro rendering on absolutely everything */
+* {
+  -webkit-font-smoothing: none;
+  -moz-osx-font-smoothing: grayscale;
+  image-rendering: pixelated;
+}
+
 body {
   overflow: hidden;
+  /* Use classic web-safe system fonts that render blocky */
+  font-family: "MS Sans Serif", "Microsoft Sans Serif", Tahoma, sans-serif;
+  /* Add a subtle scanline effect to the whole desktop */
+  background-color: #008080; 
 }
