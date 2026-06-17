@@ -2,65 +2,151 @@
 
 import Image from "next/image";
 import useSWR from "swr";
+import { useState } from "react";
 import Window from "../components/Window";
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
 export default function Home() {
-  const { data: tasks, error, isLoading } = useSWR("http://localhost:8000/tasks/", fetcher);
+  // 1. Fetch the Tasks
+  const { data: tasks, error, isLoading, mutate: mutateTasks } = useSWR("http://localhost:8000/tasks/", fetcher);
+  
+  // 2. Fetch the Player Stats!
+  const { data: player, mutate: mutatePlayer } = useSWR("http://localhost:8000/tasks/player", fetcher);
+  
+  const [title, setTitle] = useState("");
+  const [xp, setXp] = useState(10);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleCreateQuest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!title.trim()) return;
+    setIsSubmitting(true);
+
+    await fetch("http://localhost:8000/tasks/", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title, xp_reward: xp }),
+    });
+
+    setTitle(""); 
+    setXp(10);    
+    mutateTasks(); 
+    setIsSubmitting(false);
+  };
+
+  const handleCompleteQuest = async (id: number) => {
+    await fetch(`http://localhost:8000/tasks/${id}`, {
+      method: "DELETE",
+    });
+    
+    // Refresh BOTH the quest list and the XP Bar instantly!
+    mutateTasks(); 
+    mutatePlayer(); 
+  };
 
   return (
     <main className="relative w-screen h-screen overflow-hidden">
       
       {/* Background Layer */}
       <div className="absolute inset-0 z-0 pointer-events-none">
-        <Image 
-          src="/sky.png" 
-          alt="Zenith OS Sky Background"
-          fill
-          className="object-cover"
-          priority 
-        />
+        <Image src="/sky.png" alt="Zenith OS Background" fill className="object-cover" priority />
         <div className="absolute inset-0 bg-black/10 mix-blend-overlay"></div>
       </div>
 
+      {/* --- NEW: THE RETRO XP BAR --- */}
+      {player && (
+        <div className="absolute top-8 left-1/2 -translate-x-1/2 w-[600px] bg-[#c0c0c0] border-t-[#ffffff] border-l-[#ffffff] border-b-[#000000] border-r-[#000000] border-[3px] p-2 flex flex-col gap-1 z-20 shadow-[4px_4px_10px_rgba(0,0,0,0.5)] text-black">
+          <div className="flex justify-between items-end font-bold text-sm px-1">
+            <span className="tracking-widest">PLAYER LEVEL {player.level}</span>
+            <span className="text-[11px] text-[#000080]">{player.xp} TOTAL XP</span>
+          </div>
+          
+          {/* Outer Black Container */}
+          <div className="w-full h-6 bg-[#000000] border-t-[#808080] border-l-[#808080] border-b-[#ffffff] border-r-[#ffffff] border-[2px] p-[2px]">
+            {/* The Blue XP Fill - The width is calculated using Modulo (%) math! */}
+            <div 
+              className="h-full bg-gradient-to-r from-[#000080] to-[#1084d0] transition-all duration-500 ease-out"
+              style={{ width: `${player.xp % 100}%` }}
+            ></div>
+          </div>
+        </div>
+      )}
+
       {/* App Layer */}
-      <div className="relative z-10 w-full h-full p-8 flex items-center justify-center">
+      <div className="relative z-10 w-full h-full p-8 flex items-center justify-center items-start pt-32 gap-8">
         
-        <Window title="System Status" width="w-[500px]">
+        {/* WINDOW 1: The Quest Terminal */}
+        <Window title="Quest Terminal" width="w-[350px]">
+          <form onSubmit={handleCreateQuest} className="flex flex-col gap-3">
+            <p className="font-bold border-b border-[#808080] pb-1">Register New Quest</p>
+            
+            <div className="flex flex-col gap-1">
+              <label className="text-[12px] font-bold">Quest Title:</label>
+              <input 
+                type="text" 
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                className="p-1 text-[13px] border-t-[#808080] border-l-[#808080] border-b-[#ffffff] border-r-[#ffffff] border-2 bg-white outline-none focus:bg-blue-50"
+                placeholder="e.g. Finish Math Homework"
+                disabled={isSubmitting}
+              />
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-[12px] font-bold">XP Reward:</label>
+              <input 
+                type="number" 
+                value={xp}
+                onChange={(e) => setXp(Number(e.target.value))}
+                className="p-1 text-[13px] border-t-[#808080] border-l-[#808080] border-b-[#ffffff] border-r-[#ffffff] border-2 bg-white outline-none focus:bg-blue-50"
+                disabled={isSubmitting}
+              />
+            </div>
+
+            <div className="mt-2 flex justify-end">
+              <button 
+                type="submit"
+                disabled={isSubmitting || !title.trim()}
+                className="bg-[#c0c0c0] px-4 py-1 text-[13px] border-t-[#ffffff] border-l-[#ffffff] border-b-[#000000] border-r-[#000000] border-2 active:border-t-[#000000] active:border-l-[#000000] active:border-b-[#ffffff] active:border-r-[#ffffff] active:pt-[5px] active:pl-[5px] active:pb-[3px] active:pr-[3px] disabled:opacity-50 disabled:active:border-t-[#ffffff] disabled:active:border-l-[#ffffff]"
+              >
+                {isSubmitting ? "Transmitting..." : "Add Quest"}
+              </button>
+            </div>
+          </form>
+        </Window>
+
+        {/* WINDOW 2: The Active Quests Log */}
+        <Window title="Active Quests" width="w-[450px]">
           <div className="flex flex-col gap-2">
-            <p className="font-bold border-b border-[#808080] pb-1">
-              Active Quests Log
-            </p>
+            <p className="font-bold border-b border-[#808080] pb-1">Current Objectives</p>
             
-            {isLoading && <p className="text-[13px] italic">Establishing secure connection to database vault...</p>}
-            
-            {error && <p className="text-[13px] text-red-600 font-bold">CRITICAL ERROR: Failed to fetch tasks.</p>}
+            {isLoading && <p className="text-[13px] italic">Accessing vault...</p>}
+            {error && <p className="text-[13px] text-red-600 font-bold">CRITICAL ERROR</p>}
             
             {tasks && tasks.length > 0 ? (
-              <ul className="mt-2 flex flex-col gap-2">
+              <ul className="mt-2 flex flex-col gap-2 max-h-[300px] overflow-y-auto pr-2">
                 {tasks.map((task: any) => (
-                  <li key={task.id} className="text-[13px] flex items-start gap-2">
-                    <span className="font-bold text-[#000080]">[ID: {task.id}]</span> 
-                    <span>
-                      {task.title} 
-                      <span className="text-[#808080] ml-2">({task.xp_reward} XP)</span>
-                    </span>
+                  <li key={task.id} className="text-[13px] flex items-start gap-2 group">
+                    <button 
+                      onClick={() => handleCompleteQuest(task.id)}
+                      className="w-4 h-4 mt-[2px] shrink-0 bg-white border-t-[#808080] border-l-[#808080] border-b-[#ffffff] border-r-[#ffffff] border-2 flex items-center justify-center hover:bg-green-200 active:bg-green-400 active:border-t-[#000000] active:border-l-[#000000]"
+                      title="Complete Quest"
+                    ></button>
+                    
+                    <div className="flex flex-col leading-tight">
+                      <span>{task.title}</span>
+                      <span className="text-[11px] text-[#808080] font-bold">REWARD: {task.xp_reward} XP</span>
+                    </div>
                   </li>
                 ))}
               </ul>
             ) : (
-              !isLoading && <p className="text-[13px]">No active tasks found in the database.</p>
+              !isLoading && <p className="text-[13px]">No active quests.</p>
             )}
-            
-            <div className="mt-4 flex justify-end">
-              <button className="bg-[#c0c0c0] px-6 py-1 text-[13px] border-t-[#ffffff] border-l-[#ffffff] border-b-[#000000] border-r-[#000000] border-2 active:border-t-[#000000] active:border-l-[#000000] active:border-b-[#ffffff] active:border-r-[#ffffff] active:pt-[5px] active:pl-[5px] active:pb-[3px] active:pr-[3px] focus:outline-dotted focus:outline-1 focus:outline-black focus:-outline-offset-4">
-                Refresh
-              </button>
-            </div>
           </div>
         </Window>
-        
+
       </div>
     </main>
   );
