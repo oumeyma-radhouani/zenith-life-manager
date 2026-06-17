@@ -8,15 +8,15 @@ import Window from "../components/Window";
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
 export default function Home() {
-  // 1. Fetch the Tasks
   const { data: tasks, error, isLoading, mutate: mutateTasks } = useSWR("http://localhost:8000/tasks/", fetcher);
-  
-  // 2. Fetch the Player Stats!
   const { data: player, mutate: mutatePlayer } = useSWR("http://localhost:8000/tasks/player", fetcher);
   
   const [title, setTitle] = useState("");
   const [xp, setXp] = useState(10);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // --- NEW: The state to trigger the Level Up Pop-up ---
+  const [levelUpData, setLevelUpData] = useState<{ level: number, xp: number } | null>(null);
 
   const handleCreateQuest = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,12 +35,20 @@ export default function Home() {
     setIsSubmitting(false);
   };
 
-  const handleCompleteQuest = async (id: number) => {
-    await fetch(`http://localhost:8000/tasks/${id}`, {
+  const handleCompleteQuest = async (id: string) => {
+    // 1. Send the completion request
+    const response = await fetch(`http://localhost:8000/tasks/${id}`, {
       method: "DELETE",
     });
     
-    // Refresh BOTH the quest list and the XP Bar instantly!
+    // 2. Read the secret response from the API
+    const data = await response.json();
+    
+    // 3. Did we level up?! If the new level is higher, trigger the pop-up!
+    if (player && data.new_level > player.level) {
+      setLevelUpData({ level: data.new_level, xp: data.new_total_xp });
+    }
+    
     mutateTasks(); 
     mutatePlayer(); 
   };
@@ -54,7 +62,32 @@ export default function Home() {
         <div className="absolute inset-0 bg-black/10 mix-blend-overlay"></div>
       </div>
 
-      {/* --- NEW: THE RETRO XP BAR --- */}
+      {/* --- NEW: THE LEVEL UP POP-UP (Modal) --- */}
+      {levelUpData && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="animate-bounce"> {/* A little retro bounce effect */}
+            <Window title="SYSTEM OVERRIDE" width="w-[350px]">
+              <div className="flex flex-col items-center gap-4 p-4 text-center bg-[#c0c0c0]">
+                <h2 className="text-2xl font-bold tracking-widest text-[#000080]">LEVEL UP!</h2>
+                
+                <div className="bg-white border-t-[#808080] border-l-[#808080] border-b-[#ffffff] border-r-[#ffffff] border-2 p-4 w-full">
+                  <p className="text-[14px]">You have reached <span className="font-bold text-green-600">Level {levelUpData.level}</span>.</p>
+                  <p className="text-[12px] text-[#808080] mt-1">Total XP: {levelUpData.xp}</p>
+                </div>
+
+                <button 
+                  onClick={() => setLevelUpData(null)}
+                  className="mt-2 bg-[#c0c0c0] px-8 py-2 font-bold text-[14px] border-t-[#ffffff] border-l-[#ffffff] border-b-[#000000] border-r-[#000000] border-[3px] active:border-t-[#000000] active:border-l-[#000000] active:border-b-[#ffffff] active:border-r-[#ffffff] active:pt-[9px] active:pl-[9px] active:pb-[7px] active:pr-[7px]"
+                >
+                  ACKNOWLEDGE
+                </button>
+              </div>
+            </Window>
+          </div>
+        </div>
+      )}
+
+      {/* The Retro XP Bar */}
       {player && (
         <div className="absolute top-8 left-1/2 -translate-x-1/2 w-[600px] bg-[#c0c0c0] border-t-[#ffffff] border-l-[#ffffff] border-b-[#000000] border-r-[#000000] border-[3px] p-2 flex flex-col gap-1 z-20 shadow-[4px_4px_10px_rgba(0,0,0,0.5)] text-black">
           <div className="flex justify-between items-end font-bold text-sm px-1">
@@ -62,9 +95,7 @@ export default function Home() {
             <span className="text-[11px] text-[#000080]">{player.xp} TOTAL XP</span>
           </div>
           
-          {/* Outer Black Container */}
           <div className="w-full h-6 bg-[#000000] border-t-[#808080] border-l-[#808080] border-b-[#ffffff] border-r-[#ffffff] border-[2px] p-[2px]">
-            {/* The Blue XP Fill - The width is calculated using Modulo (%) math! */}
             <div 
               className="h-full bg-gradient-to-r from-[#000080] to-[#1084d0] transition-all duration-500 ease-out"
               style={{ width: `${player.xp % 100}%` }}
