@@ -12,10 +12,9 @@ export default function Home() {
   const { data: player, mutate: mutatePlayer } = useSWR("http://localhost:8000/tasks/player", fetcher);
   
   const [title, setTitle] = useState("");
-  const [xp, setXp] = useState(10);
+  const [difficulty, setDifficulty] = useState("minion"); // <-- The new dropdown state!
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  // --- NEW: The state to trigger the Level Up Pop-up ---
   const [levelUpData, setLevelUpData] = useState<{ level: number, xp: number } | null>(null);
 
   const handleCreateQuest = async (e: React.FormEvent) => {
@@ -26,25 +25,22 @@ export default function Home() {
     await fetch("http://localhost:8000/tasks/", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title, xp_reward: xp }),
+      body: JSON.stringify({ title, difficulty }), // <-- Sending the word to Python!
     });
 
     setTitle(""); 
-    setXp(10);    
+    setDifficulty("minion"); // <-- Resetting to default minion
     mutateTasks(); 
     setIsSubmitting(false);
   };
 
   const handleCompleteQuest = async (id: string) => {
-    // 1. Send the completion request
     const response = await fetch(`http://localhost:8000/tasks/${id}`, {
       method: "DELETE",
     });
     
-    // 2. Read the secret response from the API
     const data = await response.json();
     
-    // 3. Did we level up?! If the new level is higher, trigger the pop-up!
     if (player && data.new_level > player.level) {
       setLevelUpData({ level: data.new_level, xp: data.new_total_xp });
     }
@@ -62,10 +58,10 @@ export default function Home() {
         <div className="absolute inset-0 bg-black/10 mix-blend-overlay"></div>
       </div>
 
-      {/* --- NEW: THE LEVEL UP POP-UP (Modal) --- */}
+      {/* THE LEVEL UP POP-UP (Modal) */}
       {levelUpData && (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="animate-bounce"> {/* A little retro bounce effect */}
+          <div className="animate-bounce">
             <Window title="SYSTEM OVERRIDE" width="w-[350px]">
               <div className="flex flex-col items-center gap-4 p-4 text-center bg-[#c0c0c0]">
                 <h2 className="text-2xl font-bold tracking-widest text-[#000080]">LEVEL UP!</h2>
@@ -124,15 +120,19 @@ export default function Home() {
               />
             </div>
 
+            {/* --- NEW: THE DROPDOWN MENU --- */}
             <div className="flex flex-col gap-1">
-              <label className="text-[12px] font-bold">XP Reward:</label>
-              <input 
-                type="number" 
-                value={xp}
-                onChange={(e) => setXp(Number(e.target.value))}
-                className="p-1 text-[13px] border-t-[#808080] border-l-[#808080] border-b-[#ffffff] border-r-[#ffffff] border-2 bg-white outline-none focus:bg-blue-50"
+              <label className="text-[12px] font-bold">Difficulty Level:</label>
+              <select 
+                value={difficulty}
+                onChange={(e) => setDifficulty(e.target.value)}
+                className="p-1 text-[13px] border-t-[#808080] border-l-[#808080] border-b-[#ffffff] border-r-[#ffffff] border-2 bg-white outline-none cursor-pointer focus:bg-blue-50"
                 disabled={isSubmitting}
-              />
+              >
+                <option value="minion">🟢 Minion (10 XP)</option>
+                <option value="elite">🟡 Elite (30 XP)</option>
+                <option value="boss">🔴 Boss Battle (100 XP)</option>
+              </select>
             </div>
 
             <div className="mt-2 flex justify-end">
