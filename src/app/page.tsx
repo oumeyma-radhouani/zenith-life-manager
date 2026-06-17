@@ -2,22 +2,42 @@
 
 import Image from "next/image";
 import useSWR from "swr";
-import { useState } from "react";
+import { useState, useEffect } from "react"; // <-- NEW: Added useEffect
 import Window from "../components/Window";
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
-
+interface Task {
+  id: string;
+  title: string;
+  xp_reward: number;
+  is_daily: boolean;
+}
 export default function Home() {
+  // --- VAULT CONNECTIONS ---
   const { data: tasks, error, isLoading, mutate: mutateTasks } = useSWR("http://localhost:8000/tasks/", fetcher);
   const { data: player, mutate: mutatePlayer } = useSWR("http://localhost:8000/tasks/player", fetcher);
+  const { data: note, mutate: mutateNote } = useSWR("http://localhost:8000/notes/", fetcher); // <-- NEW: Note connection
   
+  // --- TASK STATE ---
   const [title, setTitle] = useState("");
   const [difficulty, setDifficulty] = useState("minion"); 
-  const [isDaily, setIsDaily] = useState(false); // <-- NEW: Checkbox state!
+  const [isDaily, setIsDaily] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
   const [levelUpData, setLevelUpData] = useState<{ level: number, xp: number } | null>(null);
 
+  // --- NOTE STATE ---
+  const [noteText, setNoteText] = useState("");
+  const [isSavingNote, setIsSavingNote] = useState(false);
+
+ // When the vault sends us the saved note, put it into the text box!
+  useEffect(() => {
+    if (note && noteText === "") {
+      setNoteText(note.content || "");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [note]);
+  
+  // --- HANDLERS ---
   const handleCreateQuest = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
@@ -26,12 +46,12 @@ export default function Home() {
     await fetch("http://localhost:8000/tasks/", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title, difficulty, is_daily: isDaily }), // <-- Sending the habit status!
+      body: JSON.stringify({ title, difficulty, is_daily: isDaily }),
     });
 
     setTitle(""); 
     setDifficulty("minion"); 
-    setIsDaily(false); // <-- Resetting the checkbox
+    setIsDaily(false); 
     mutateTasks(); 
     setIsSubmitting(false);
   };
@@ -51,18 +71,30 @@ export default function Home() {
     mutatePlayer(); 
   };
 
+  // --- NEW: Save Note Handler ---
+  const handleSaveNote = async () => {
+    setIsSavingNote(true);
+    await fetch("http://localhost:8000/notes/", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: noteText }),
+    });
+    mutateNote(); // Refresh to confirm save
+    setIsSavingNote(false);
+  };
+
   return (
-    <main className="relative w-screen h-screen overflow-hidden">
+    <main className="relative w-screen h-screen overflow-x-hidden overflow-y-auto pb-10">
       
       {/* Background Layer */}
-      <div className="absolute inset-0 z-0 pointer-events-none">
+      <div className="fixed inset-0 z-0 pointer-events-none">
         <Image src="/sky.png" alt="Zenith OS Background" fill className="object-cover" priority />
         <div className="absolute inset-0 bg-black/10 mix-blend-overlay"></div>
       </div>
 
       {/* THE LEVEL UP POP-UP (Modal) */}
       {levelUpData && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
           <div className="animate-bounce">
             <Window title="SYSTEM OVERRIDE" width="w-[350px]">
               <div className="flex flex-col items-center gap-4 p-4 text-center bg-[#c0c0c0]">
@@ -102,11 +134,11 @@ export default function Home() {
         </div>
       )}
 
-      {/* App Layer */}
-      <div className="relative z-10 w-full h-full p-8 flex items-center justify-center items-start pt-32 gap-8">
+      {/* App Layer - Added flex-wrap so windows fit nicely */}
+      <div className="relative z-10 w-full p-8 flex justify-center items-start pt-32 gap-6 flex-wrap max-w-[1400px] mx-auto">
         
         {/* WINDOW 1: The Quest Terminal */}
-        <Window title="Quest Terminal" width="w-[350px]">
+        <Window title="Quest Terminal" width="w-[320px]">
           <form onSubmit={handleCreateQuest} className="flex flex-col gap-3">
             <p className="font-bold border-b border-[#808080] pb-1">Register New Quest</p>
             
@@ -136,7 +168,6 @@ export default function Home() {
               </select>
             </div>
 
-            {/* --- NEW: The Daily Habit Checkbox --- */}
             <div className="flex items-center gap-2 mt-1">
               <input 
                 type="checkbox" 
@@ -164,7 +195,7 @@ export default function Home() {
         </Window>
 
         {/* WINDOW 2: The Active Quests Log */}
-        <Window title="Active Quests" width="w-[450px]">
+        <Window title="Active Quests" width="w-[400px]">
           <div className="flex flex-col gap-2">
             <p className="font-bold border-b border-[#808080] pb-1">Current Objectives</p>
             
@@ -173,8 +204,8 @@ export default function Home() {
             
             {tasks && tasks.length > 0 ? (
               <ul className="mt-2 flex flex-col gap-2 max-h-[300px] overflow-y-auto pr-2">
-                {tasks.map((task: any) => (
-                  <li key={task.id} className="text-[13px] flex items-start gap-2 group">
+                {tasks.map((task: Task) => (
+                    <li key={task.id} className="text-[13px] flex items-start gap-2 group">
                     <button 
                       onClick={() => handleCompleteQuest(task.id)}
                       className="w-4 h-4 mt-[2px] shrink-0 bg-white border-t-[#808080] border-l-[#808080] border-b-[#ffffff] border-r-[#ffffff] border-2 flex items-center justify-center hover:bg-green-200 active:bg-green-400 active:border-t-[#000000] active:border-l-[#000000]"
@@ -184,7 +215,6 @@ export default function Home() {
                     <div className="flex flex-col leading-tight">
                       <span>
                         {task.title} 
-                        {/* --- NEW: The Visual Tag for Habits --- */}
                         {task.is_daily && <span className="ml-2 text-[10px] bg-[#000080] text-white px-1 py-[1px] tracking-wider font-bold">DAILY</span>}
                       </span>
                       <span className="text-[11px] text-[#808080] font-bold">REWARD: {task.xp_reward} XP</span>
@@ -195,6 +225,30 @@ export default function Home() {
             ) : (
               !isLoading && <p className="text-[13px]">No active quests.</p>
             )}
+          </div>
+        </Window>
+
+        {/* --- NEW: WINDOW 3: The Scratchpad --- */}
+        <Window title="Brain Dump" width="w-[300px]">
+          <div className="flex flex-col gap-2">
+            <p className="font-bold border-b border-[#808080] pb-1">System Scratchpad</p>
+            
+            <textarea 
+              value={noteText}
+              onChange={(e) => setNoteText(e.target.value)}
+              className="w-full h-[200px] p-2 text-[13px] bg-[#ffffe0] border-t-[#808080] border-l-[#808080] border-b-[#ffffff] border-r-[#ffffff] border-2 outline-none resize-none focus:bg-[#fffacd]"
+              placeholder="Jot down random thoughts, code syntax, or grocery lists here..."
+            />
+            
+            <div className="mt-1 flex justify-end">
+              <button 
+                onClick={handleSaveNote}
+                disabled={isSavingNote}
+                className="bg-[#c0c0c0] px-4 py-1 text-[13px] border-t-[#ffffff] border-l-[#ffffff] border-b-[#000000] border-r-[#000000] border-2 active:border-t-[#000000] active:border-l-[#000000] active:border-b-[#ffffff] active:border-r-[#ffffff] active:pt-[5px] active:pl-[5px] active:pb-[3px] active:pr-[3px] disabled:opacity-50 disabled:active:border-t-[#ffffff] disabled:active:border-l-[#ffffff]"
+              >
+                {isSavingNote ? "Writing to Vault..." : "Save Note"}
+              </button>
+            </div>
           </div>
         </Window>
 
