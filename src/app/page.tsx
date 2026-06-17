@@ -12,7 +12,8 @@ export default function Home() {
   const { data: player, mutate: mutatePlayer } = useSWR("http://localhost:8000/tasks/player", fetcher);
   
   const [title, setTitle] = useState("");
-  const [difficulty, setDifficulty] = useState("minion"); // <-- The new dropdown state!
+  const [difficulty, setDifficulty] = useState("minion"); 
+  const [isDaily, setIsDaily] = useState(false); // <-- NEW: Checkbox state!
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   const [levelUpData, setLevelUpData] = useState<{ level: number, xp: number } | null>(null);
@@ -25,11 +26,12 @@ export default function Home() {
     await fetch("http://localhost:8000/tasks/", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title, difficulty }), // <-- Sending the word to Python!
+      body: JSON.stringify({ title, difficulty, is_daily: isDaily }), // <-- Sending the habit status!
     });
 
     setTitle(""); 
-    setDifficulty("minion"); // <-- Resetting to default minion
+    setDifficulty("minion"); 
+    setIsDaily(false); // <-- Resetting the checkbox
     mutateTasks(); 
     setIsSubmitting(false);
   };
@@ -120,7 +122,6 @@ export default function Home() {
               />
             </div>
 
-            {/* --- NEW: THE DROPDOWN MENU --- */}
             <div className="flex flex-col gap-1">
               <label className="text-[12px] font-bold">Difficulty Level:</label>
               <select 
@@ -133,6 +134,21 @@ export default function Home() {
                 <option value="elite">🟡 Elite (30 XP)</option>
                 <option value="boss">🔴 Boss Battle (100 XP)</option>
               </select>
+            </div>
+
+            {/* --- NEW: The Daily Habit Checkbox --- */}
+            <div className="flex items-center gap-2 mt-1">
+              <input 
+                type="checkbox" 
+                id="daily-check"
+                checked={isDaily}
+                onChange={(e) => setIsDaily(e.target.checked)}
+                className="cursor-pointer border-2 border-black"
+                disabled={isSubmitting}
+              />
+              <label htmlFor="daily-check" className="text-[12px] font-bold cursor-pointer">
+                Register as Daily Habit
+              </label>
             </div>
 
             <div className="mt-2 flex justify-end">
@@ -166,7 +182,11 @@ export default function Home() {
                     ></button>
                     
                     <div className="flex flex-col leading-tight">
-                      <span>{task.title}</span>
+                      <span>
+                        {task.title} 
+                        {/* --- NEW: The Visual Tag for Habits --- */}
+                        {task.is_daily && <span className="ml-2 text-[10px] bg-[#000080] text-white px-1 py-[1px] tracking-wider font-bold">DAILY</span>}
+                      </span>
                       <span className="text-[11px] text-[#808080] font-bold">REWARD: {task.xp_reward} XP</span>
                     </div>
                   </li>
