@@ -1,5 +1,7 @@
 # ★~(◠‿◕✿) Zenith: Gamified Life & Task Manager
 
+> 🔗 **Backend API:** This frontend desktop UI is powered by the [Zenith OS API Vault](https://github.com/oumeyma-radhouani/zenith-api).
+
 > A modern, full-stack task management platform designed to turn daily habits into an engaging RPG experience.
 
 ## ( •̀ ω •́ )✧ Project Overview
