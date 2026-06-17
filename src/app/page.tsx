@@ -4,6 +4,7 @@ import Image from "next/image";
 import useSWR from "swr";
 import { useState, useEffect } from "react"; 
 import Window from "../components/Window";
+import Calendar from "../components/Calendar"; // <-- NEW: Imported the Calendar!
 
 // --- TYPESCRIPT BLUEPRINT ---
 interface Task {
@@ -11,7 +12,7 @@ interface Task {
   title: string;
   xp_reward: number;
   is_daily: boolean;
-  due_date: string | null; // <-- NEW
+  due_date: string | null; 
 }
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
@@ -25,7 +26,7 @@ export default function Home() {
   const [title, setTitle] = useState("");
   const [difficulty, setDifficulty] = useState("minion"); 
   const [isDaily, setIsDaily] = useState(false);
-  const [dueDate, setDueDate] = useState(""); // <-- NEW: Deadline State
+  const [dueDate, setDueDate] = useState(""); 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [levelUpData, setLevelUpData] = useState<{ level: number, xp: number } | null>(null);
 
@@ -48,7 +49,6 @@ export default function Home() {
     await fetch("http://localhost:8000/tasks/", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      // Send the date if it exists, otherwise send null!
       body: JSON.stringify({ 
         title, 
         difficulty, 
@@ -60,7 +60,7 @@ export default function Home() {
     setTitle(""); 
     setDifficulty("minion"); 
     setIsDaily(false); 
-    setDueDate(""); // <-- Reset deadline
+    setDueDate(""); 
     mutateTasks(); 
     setIsSubmitting(false);
   };
@@ -135,83 +135,109 @@ export default function Home() {
         </div>
       )}
 
+      {/* The Desktop Layout */}
       <div className="relative z-10 w-full p-8 flex justify-center items-start pt-32 gap-6 flex-wrap max-w-[1400px] mx-auto">
         
-        {/* WINDOW 1: The Quest Terminal */}
-        <Window title="Quest Terminal" width="w-[320px]">
-          <form onSubmit={handleCreateQuest} className="flex flex-col gap-3">
-            <p className="font-bold border-b border-[#808080] pb-1">Register New Quest</p>
-            
-            <div className="flex flex-col gap-1">
-              <label className="text-[12px] font-bold">Quest Title:</label>
-              <input 
-                type="text" 
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                className="p-1 text-[13px] border-t-[#808080] border-l-[#808080] border-b-[#ffffff] border-r-[#ffffff] border-2 bg-white outline-none focus:bg-blue-50"
-                placeholder="e.g. Finish Math Homework"
-                disabled={isSubmitting}
+        {/* COLUMN 1: Inputs & Memory */}
+        <div className="flex flex-col gap-6">
+          
+          {/* WINDOW 1: The Quest Terminal */}
+          <Window title="Quest Terminal" width="w-[320px]">
+            <form onSubmit={handleCreateQuest} className="flex flex-col gap-3">
+              <p className="font-bold border-b border-[#808080] pb-1">Register New Quest</p>
+              
+              <div className="flex flex-col gap-1">
+                <label className="text-[12px] font-bold">Quest Title:</label>
+                <input 
+                  type="text" 
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  className="p-1 text-[13px] border-t-[#808080] border-l-[#808080] border-b-[#ffffff] border-r-[#ffffff] border-2 bg-white outline-none focus:bg-blue-50"
+                  placeholder="e.g. Finish Math Homework"
+                  disabled={isSubmitting}
+                />
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-[12px] font-bold">Difficulty Level:</label>
+                <select 
+                  value={difficulty}
+                  onChange={(e) => setDifficulty(e.target.value)}
+                  className="p-1 text-[13px] border-t-[#808080] border-l-[#808080] border-b-[#ffffff] border-r-[#ffffff] border-2 bg-white outline-none cursor-pointer focus:bg-blue-50"
+                  disabled={isSubmitting}
+                >
+                  <option value="minion">🟢 Minion (10 XP)</option>
+                  <option value="elite">🟡 Elite (30 XP)</option>
+                  <option value="boss">🔴 Boss Battle (100 XP)</option>
+                </select>
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-[12px] font-bold text-[#808080] group-[&:not(:disabled)]:text-black">
+                  Deadline (Optional):
+                </label>
+                <input 
+                  type="date" 
+                  value={dueDate}
+                  onChange={(e) => setDueDate(e.target.value)}
+                  className="p-1 text-[13px] border-t-[#808080] border-l-[#808080] border-b-[#ffffff] border-r-[#ffffff] border-2 bg-white outline-none focus:bg-blue-50 disabled:bg-[#e0e0e0] disabled:cursor-not-allowed"
+                  disabled={isSubmitting || isDaily} 
+                />
+              </div>
+
+              <div className="flex items-center gap-2 mt-1">
+                <input 
+                  type="checkbox" 
+                  id="daily-check"
+                  checked={isDaily}
+                  onChange={(e) => {
+                    setIsDaily(e.target.checked);
+                    if (e.target.checked) setDueDate(""); 
+                  }}
+                  className="cursor-pointer border-2 border-black"
+                  disabled={isSubmitting}
+                />
+                <label htmlFor="daily-check" className="text-[12px] font-bold cursor-pointer">
+                  Register as Daily Habit
+                </label>
+              </div>
+
+              <div className="mt-2 flex justify-end">
+                <button 
+                  type="submit"
+                  disabled={isSubmitting || !title.trim()}
+                  className="bg-[#c0c0c0] px-4 py-1 text-[13px] border-t-[#ffffff] border-l-[#ffffff] border-b-[#000000] border-r-[#000000] border-2 active:border-t-[#000000] active:border-l-[#000000] active:border-b-[#ffffff] active:border-r-[#ffffff] active:pt-[5px] active:pl-[5px] active:pb-[3px] active:pr-[3px] disabled:opacity-50 disabled:active:border-t-[#ffffff] disabled:active:border-l-[#ffffff]"
+                >
+                  {isSubmitting ? "Transmitting..." : "Add Quest"}
+                </button>
+              </div>
+            </form>
+          </Window>
+
+          {/* WINDOW 3: The Scratchpad (Moved under the terminal!) */}
+          <Window title="Brain Dump" width="w-[320px]">
+            <div className="flex flex-col gap-2">
+              <p className="font-bold border-b border-[#808080] pb-1">System Scratchpad</p>
+              <textarea 
+                value={noteText}
+                onChange={(e) => setNoteText(e.target.value)}
+                className="w-full h-[150px] p-2 text-[13px] bg-[#ffffe0] border-t-[#808080] border-l-[#808080] border-b-[#ffffff] border-r-[#ffffff] border-2 outline-none resize-none focus:bg-[#fffacd]"
+                placeholder="Jot down random thoughts, code syntax, or grocery lists here..."
               />
+              <div className="mt-1 flex justify-end">
+                <button 
+                  onClick={handleSaveNote}
+                  disabled={isSavingNote}
+                  className="bg-[#c0c0c0] px-4 py-1 text-[13px] border-t-[#ffffff] border-l-[#ffffff] border-b-[#000000] border-r-[#000000] border-2 active:border-t-[#000000] active:border-l-[#000000] active:border-b-[#ffffff] active:border-r-[#ffffff] active:pt-[5px] active:pl-[5px] active:pb-[3px] active:pr-[3px] disabled:opacity-50 disabled:active:border-t-[#ffffff] disabled:active:border-l-[#ffffff]"
+                >
+                  {isSavingNote ? "Writing to Vault..." : "Save Note"}
+                </button>
+              </div>
             </div>
+          </Window>
+        </div>
 
-            <div className="flex flex-col gap-1">
-              <label className="text-[12px] font-bold">Difficulty Level:</label>
-              <select 
-                value={difficulty}
-                onChange={(e) => setDifficulty(e.target.value)}
-                className="p-1 text-[13px] border-t-[#808080] border-l-[#808080] border-b-[#ffffff] border-r-[#ffffff] border-2 bg-white outline-none cursor-pointer focus:bg-blue-50"
-                disabled={isSubmitting}
-              >
-                <option value="minion">🟢 Minion (10 XP)</option>
-                <option value="elite">🟡 Elite (30 XP)</option>
-                <option value="boss">🔴 Boss Battle (100 XP)</option>
-              </select>
-            </div>
-
-            {/* --- NEW: The Deadline Picker --- */}
-            <div className="flex flex-col gap-1">
-              <label className="text-[12px] font-bold text-[#808080] group-[&:not(:disabled)]:text-black">
-                Deadline (Optional):
-              </label>
-              <input 
-                type="date" 
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-                className="p-1 text-[13px] border-t-[#808080] border-l-[#808080] border-b-[#ffffff] border-r-[#ffffff] border-2 bg-white outline-none focus:bg-blue-50 disabled:bg-[#e0e0e0] disabled:cursor-not-allowed"
-                disabled={isSubmitting || isDaily} // Disabled if it's a daily habit!
-              />
-            </div>
-
-            <div className="flex items-center gap-2 mt-1">
-              <input 
-                type="checkbox" 
-                id="daily-check"
-                checked={isDaily}
-                onChange={(e) => {
-                  setIsDaily(e.target.checked);
-                  if (e.target.checked) setDueDate(""); // Clear date if making it daily
-                }}
-                className="cursor-pointer border-2 border-black"
-                disabled={isSubmitting}
-              />
-              <label htmlFor="daily-check" className="text-[12px] font-bold cursor-pointer">
-                Register as Daily Habit
-              </label>
-            </div>
-
-            <div className="mt-2 flex justify-end">
-              <button 
-                type="submit"
-                disabled={isSubmitting || !title.trim()}
-                className="bg-[#c0c0c0] px-4 py-1 text-[13px] border-t-[#ffffff] border-l-[#ffffff] border-b-[#000000] border-r-[#000000] border-2 active:border-t-[#000000] active:border-l-[#000000] active:border-b-[#ffffff] active:border-r-[#ffffff] active:pt-[5px] active:pl-[5px] active:pb-[3px] active:pr-[3px] disabled:opacity-50 disabled:active:border-t-[#ffffff] disabled:active:border-l-[#ffffff]"
-              >
-                {isSubmitting ? "Transmitting..." : "Add Quest"}
-              </button>
-            </div>
-          </form>
-        </Window>
-
-        {/* WINDOW 2: The Active Quests Log */}
+        {/* COLUMN 2: The Present */}
         <Window title="Active Quests" width="w-[400px]">
           <div className="flex flex-col gap-2">
             <p className="font-bold border-b border-[#808080] pb-1">Current Objectives</p>
@@ -220,7 +246,7 @@ export default function Home() {
             {error && <p className="text-[13px] text-red-600 font-bold">CRITICAL ERROR</p>}
             
             {tasks && tasks.length > 0 ? (
-              <ul className="mt-2 flex flex-col gap-2 max-h-[300px] overflow-y-auto pr-2">
+              <ul className="mt-2 flex flex-col gap-2 max-h-[460px] overflow-y-auto pr-2">
                 {tasks.map((task: Task) => (
                   <li key={task.id} className="text-[13px] flex items-start gap-2 group">
                     <button 
@@ -233,7 +259,6 @@ export default function Home() {
                       <span>
                         {task.title} 
                         {task.is_daily && <span className="ml-2 text-[10px] bg-[#000080] text-white px-1 py-[1px] tracking-wider font-bold">DAILY</span>}
-                        {/* --- NEW: The Red Deadline Tag --- */}
                         {task.due_date && <span className="ml-2 text-[10px] bg-red-600 text-white px-1 py-[1px] tracking-wider font-bold">DUE: {task.due_date}</span>}
                       </span>
                       <span className="text-[11px] text-[#808080] font-bold">REWARD: {task.xp_reward} XP</span>
@@ -247,26 +272,9 @@ export default function Home() {
           </div>
         </Window>
 
-        {/* WINDOW 3: The Scratchpad */}
-        <Window title="Brain Dump" width="w-[300px]">
-          <div className="flex flex-col gap-2">
-            <p className="font-bold border-b border-[#808080] pb-1">System Scratchpad</p>
-            <textarea 
-              value={noteText}
-              onChange={(e) => setNoteText(e.target.value)}
-              className="w-full h-[200px] p-2 text-[13px] bg-[#ffffe0] border-t-[#808080] border-l-[#808080] border-b-[#ffffff] border-r-[#ffffff] border-2 outline-none resize-none focus:bg-[#fffacd]"
-              placeholder="Jot down random thoughts, code syntax, or grocery lists here..."
-            />
-            <div className="mt-1 flex justify-end">
-              <button 
-                onClick={handleSaveNote}
-                disabled={isSavingNote}
-                className="bg-[#c0c0c0] px-4 py-1 text-[13px] border-t-[#ffffff] border-l-[#ffffff] border-b-[#000000] border-r-[#000000] border-2 active:border-t-[#000000] active:border-l-[#000000] active:border-b-[#ffffff] active:border-r-[#ffffff] active:pt-[5px] active:pl-[5px] active:pb-[3px] active:pr-[3px] disabled:opacity-50 disabled:active:border-t-[#ffffff] disabled:active:border-l-[#ffffff]"
-              >
-                {isSavingNote ? "Writing to Vault..." : "Save Note"}
-              </button>
-            </div>
-          </div>
+        {/* COLUMN 3: The Future */}
+        <Window title="Schedule Sync" width="w-[500px]">
+          <Calendar tasks={tasks || []} />
         </Window>
 
       </div>
