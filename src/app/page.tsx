@@ -2,26 +2,30 @@
 
 import Image from "next/image";
 import useSWR from "swr";
-import { useState, useEffect } from "react"; // <-- NEW: Added useEffect
+import { useState, useEffect } from "react"; 
 import Window from "../components/Window";
 
-const fetcher = (url: string) => fetch(url).then((res) => res.json());
+// --- TYPESCRIPT BLUEPRINT ---
 interface Task {
   id: string;
   title: string;
   xp_reward: number;
   is_daily: boolean;
+  due_date: string | null; // <-- NEW
 }
+
+const fetcher = (url: string) => fetch(url).then((res) => res.json());
+
 export default function Home() {
-  // --- VAULT CONNECTIONS ---
   const { data: tasks, error, isLoading, mutate: mutateTasks } = useSWR("http://localhost:8000/tasks/", fetcher);
   const { data: player, mutate: mutatePlayer } = useSWR("http://localhost:8000/tasks/player", fetcher);
-  const { data: note, mutate: mutateNote } = useSWR("http://localhost:8000/notes/", fetcher); // <-- NEW: Note connection
+  const { data: note, mutate: mutateNote } = useSWR("http://localhost:8000/notes/", fetcher); 
   
   // --- TASK STATE ---
   const [title, setTitle] = useState("");
   const [difficulty, setDifficulty] = useState("minion"); 
   const [isDaily, setIsDaily] = useState(false);
+  const [dueDate, setDueDate] = useState(""); // <-- NEW: Deadline State
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [levelUpData, setLevelUpData] = useState<{ level: number, xp: number } | null>(null);
 
@@ -29,15 +33,13 @@ export default function Home() {
   const [noteText, setNoteText] = useState("");
   const [isSavingNote, setIsSavingNote] = useState(false);
 
- // When the vault sends us the saved note, put it into the text box!
   useEffect(() => {
     if (note && noteText === "") {
       setNoteText(note.content || "");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [note]);
-  
-  // --- HANDLERS ---
+
   const handleCreateQuest = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
@@ -46,12 +48,19 @@ export default function Home() {
     await fetch("http://localhost:8000/tasks/", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title, difficulty, is_daily: isDaily }),
+      // Send the date if it exists, otherwise send null!
+      body: JSON.stringify({ 
+        title, 
+        difficulty, 
+        is_daily: isDaily,
+        due_date: dueDate ? dueDate : null 
+      }),
     });
 
     setTitle(""); 
     setDifficulty("minion"); 
     setIsDaily(false); 
+    setDueDate(""); // <-- Reset deadline
     mutateTasks(); 
     setIsSubmitting(false);
   };
@@ -60,7 +69,6 @@ export default function Home() {
     const response = await fetch(`http://localhost:8000/tasks/${id}`, {
       method: "DELETE",
     });
-    
     const data = await response.json();
     
     if (player && data.new_level > player.level) {
@@ -71,7 +79,6 @@ export default function Home() {
     mutatePlayer(); 
   };
 
-  // --- NEW: Save Note Handler ---
   const handleSaveNote = async () => {
     setIsSavingNote(true);
     await fetch("http://localhost:8000/notes/", {
@@ -79,32 +86,28 @@ export default function Home() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ content: noteText }),
     });
-    mutateNote(); // Refresh to confirm save
+    mutateNote();
     setIsSavingNote(false);
   };
 
   return (
     <main className="relative w-screen h-screen overflow-x-hidden overflow-y-auto pb-10">
       
-      {/* Background Layer */}
       <div className="fixed inset-0 z-0 pointer-events-none">
         <Image src="/sky.png" alt="Zenith OS Background" fill className="object-cover" priority />
         <div className="absolute inset-0 bg-black/10 mix-blend-overlay"></div>
       </div>
 
-      {/* THE LEVEL UP POP-UP (Modal) */}
       {levelUpData && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
           <div className="animate-bounce">
             <Window title="SYSTEM OVERRIDE" width="w-[350px]">
               <div className="flex flex-col items-center gap-4 p-4 text-center bg-[#c0c0c0]">
                 <h2 className="text-2xl font-bold tracking-widest text-[#000080]">LEVEL UP!</h2>
-                
                 <div className="bg-white border-t-[#808080] border-l-[#808080] border-b-[#ffffff] border-r-[#ffffff] border-2 p-4 w-full">
                   <p className="text-[14px]">You have reached <span className="font-bold text-green-600">Level {levelUpData.level}</span>.</p>
                   <p className="text-[12px] text-[#808080] mt-1">Total XP: {levelUpData.xp}</p>
                 </div>
-
                 <button 
                   onClick={() => setLevelUpData(null)}
                   className="mt-2 bg-[#c0c0c0] px-8 py-2 font-bold text-[14px] border-t-[#ffffff] border-l-[#ffffff] border-b-[#000000] border-r-[#000000] border-[3px] active:border-t-[#000000] active:border-l-[#000000] active:border-b-[#ffffff] active:border-r-[#ffffff] active:pt-[9px] active:pl-[9px] active:pb-[7px] active:pr-[7px]"
@@ -117,14 +120,12 @@ export default function Home() {
         </div>
       )}
 
-      {/* The Retro XP Bar */}
       {player && (
         <div className="absolute top-8 left-1/2 -translate-x-1/2 w-[600px] bg-[#c0c0c0] border-t-[#ffffff] border-l-[#ffffff] border-b-[#000000] border-r-[#000000] border-[3px] p-2 flex flex-col gap-1 z-20 shadow-[4px_4px_10px_rgba(0,0,0,0.5)] text-black">
           <div className="flex justify-between items-end font-bold text-sm px-1">
             <span className="tracking-widest">PLAYER LEVEL {player.level}</span>
             <span className="text-[11px] text-[#000080]">{player.xp} TOTAL XP</span>
           </div>
-          
           <div className="w-full h-6 bg-[#000000] border-t-[#808080] border-l-[#808080] border-b-[#ffffff] border-r-[#ffffff] border-[2px] p-[2px]">
             <div 
               className="h-full bg-gradient-to-r from-[#000080] to-[#1084d0] transition-all duration-500 ease-out"
@@ -134,7 +135,6 @@ export default function Home() {
         </div>
       )}
 
-      {/* App Layer - Added flex-wrap so windows fit nicely */}
       <div className="relative z-10 w-full p-8 flex justify-center items-start pt-32 gap-6 flex-wrap max-w-[1400px] mx-auto">
         
         {/* WINDOW 1: The Quest Terminal */}
@@ -168,12 +168,29 @@ export default function Home() {
               </select>
             </div>
 
+            {/* --- NEW: The Deadline Picker --- */}
+            <div className="flex flex-col gap-1">
+              <label className="text-[12px] font-bold text-[#808080] group-[&:not(:disabled)]:text-black">
+                Deadline (Optional):
+              </label>
+              <input 
+                type="date" 
+                value={dueDate}
+                onChange={(e) => setDueDate(e.target.value)}
+                className="p-1 text-[13px] border-t-[#808080] border-l-[#808080] border-b-[#ffffff] border-r-[#ffffff] border-2 bg-white outline-none focus:bg-blue-50 disabled:bg-[#e0e0e0] disabled:cursor-not-allowed"
+                disabled={isSubmitting || isDaily} // Disabled if it's a daily habit!
+              />
+            </div>
+
             <div className="flex items-center gap-2 mt-1">
               <input 
                 type="checkbox" 
                 id="daily-check"
                 checked={isDaily}
-                onChange={(e) => setIsDaily(e.target.checked)}
+                onChange={(e) => {
+                  setIsDaily(e.target.checked);
+                  if (e.target.checked) setDueDate(""); // Clear date if making it daily
+                }}
                 className="cursor-pointer border-2 border-black"
                 disabled={isSubmitting}
               />
@@ -205,7 +222,7 @@ export default function Home() {
             {tasks && tasks.length > 0 ? (
               <ul className="mt-2 flex flex-col gap-2 max-h-[300px] overflow-y-auto pr-2">
                 {tasks.map((task: Task) => (
-                    <li key={task.id} className="text-[13px] flex items-start gap-2 group">
+                  <li key={task.id} className="text-[13px] flex items-start gap-2 group">
                     <button 
                       onClick={() => handleCompleteQuest(task.id)}
                       className="w-4 h-4 mt-[2px] shrink-0 bg-white border-t-[#808080] border-l-[#808080] border-b-[#ffffff] border-r-[#ffffff] border-2 flex items-center justify-center hover:bg-green-200 active:bg-green-400 active:border-t-[#000000] active:border-l-[#000000]"
@@ -216,6 +233,8 @@ export default function Home() {
                       <span>
                         {task.title} 
                         {task.is_daily && <span className="ml-2 text-[10px] bg-[#000080] text-white px-1 py-[1px] tracking-wider font-bold">DAILY</span>}
+                        {/* --- NEW: The Red Deadline Tag --- */}
+                        {task.due_date && <span className="ml-2 text-[10px] bg-red-600 text-white px-1 py-[1px] tracking-wider font-bold">DUE: {task.due_date}</span>}
                       </span>
                       <span className="text-[11px] text-[#808080] font-bold">REWARD: {task.xp_reward} XP</span>
                     </div>
@@ -228,18 +247,16 @@ export default function Home() {
           </div>
         </Window>
 
-        {/* --- NEW: WINDOW 3: The Scratchpad --- */}
+        {/* WINDOW 3: The Scratchpad */}
         <Window title="Brain Dump" width="w-[300px]">
           <div className="flex flex-col gap-2">
             <p className="font-bold border-b border-[#808080] pb-1">System Scratchpad</p>
-            
             <textarea 
               value={noteText}
               onChange={(e) => setNoteText(e.target.value)}
               className="w-full h-[200px] p-2 text-[13px] bg-[#ffffe0] border-t-[#808080] border-l-[#808080] border-b-[#ffffff] border-r-[#ffffff] border-2 outline-none resize-none focus:bg-[#fffacd]"
               placeholder="Jot down random thoughts, code syntax, or grocery lists here..."
             />
-            
             <div className="mt-1 flex justify-end">
               <button 
                 onClick={handleSaveNote}
