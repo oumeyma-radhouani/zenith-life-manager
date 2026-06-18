@@ -4,15 +4,22 @@ import Image from "next/image";
 import useSWR from "swr";
 import { useState, useEffect } from "react"; 
 import Window from "../components/Window";
-import Calendar from "../components/Calendar"; // <-- NEW: Imported the Calendar!
+import Calendar from "../components/Calendar";
 
 // --- TYPESCRIPT BLUEPRINT ---
+interface Subtask {
+  id: number;
+  title: string;
+  is_completed: boolean;
+}
+
 interface Task {
   id: string;
   title: string;
   xp_reward: number;
   is_daily: boolean;
   due_date: string | null; 
+  subtasks?: Subtask[]; // <-- NEW: It now expects a checklist!
 }
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
@@ -30,6 +37,10 @@ export default function Home() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [levelUpData, setLevelUpData] = useState<{ level: number, xp: number } | null>(null);
 
+  // --- NEW: SUBTASK STATE ---
+  const [subtasks, setSubtasks] = useState<string[]>([]);
+  const [subtaskInput, setSubtaskInput] = useState("");
+
   // --- NOTE STATE ---
   const [noteText, setNoteText] = useState("");
   const [isSavingNote, setIsSavingNote] = useState(false);
@@ -40,6 +51,19 @@ export default function Home() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [note]);
+
+  // --- HANDLERS ---
+  const handleAddSubtask = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (subtaskInput.trim()) {
+      setSubtasks([...subtasks, subtaskInput.trim()]);
+      setSubtaskInput("");
+    }
+  };
+
+  const handleRemoveSubtask = (index: number) => {
+    setSubtasks(subtasks.filter((_, i) => i !== index));
+  };
 
   const handleCreateQuest = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -53,7 +77,8 @@ export default function Home() {
         title, 
         difficulty, 
         is_daily: isDaily,
-        due_date: dueDate ? dueDate : null 
+        due_date: dueDate ? dueDate : null,
+        subtasks: subtasks // <-- Send the checklist to Python!
       }),
     });
 
@@ -61,8 +86,16 @@ export default function Home() {
     setDifficulty("minion"); 
     setIsDaily(false); 
     setDueDate(""); 
+    setSubtasks([]); // <-- Reset the checklist
     mutateTasks(); 
     setIsSubmitting(false);
+  };
+
+  const handleToggleSubtask = async (subtaskId: number) => {
+    await fetch(`http://localhost:8000/tasks/subtasks/${subtaskId}`, {
+      method: "PUT",
+    });
+    mutateTasks(); // Refresh to see the checkmark!
   };
 
   const handleCompleteQuest = async (id: string) => {
@@ -71,6 +104,12 @@ export default function Home() {
     });
     const data = await response.json();
     
+    // The Python API's new bouncer!
+    if (data.error) {
+      alert(`SYSTEM WARNING: ${data.error}`);
+      return;
+    }
+
     if (player && data.new_level > player.level) {
       setLevelUpData({ level: data.new_level, xp: data.new_total_xp });
     }
@@ -91,7 +130,7 @@ export default function Home() {
   };
 
   return (
-    <main className="relative w-screen h-screen overflow-x-hidden overflow-y-auto pb-10">
+    <main className="relative w-screen h-screen overflow-x-hidden overflow-y-auto pb-10 text-black">
       
       <div className="fixed inset-0 z-0 pointer-events-none">
         <Image src="/sky.png" alt="Zenith OS Background" fill className="object-cover" priority />
@@ -121,7 +160,7 @@ export default function Home() {
       )}
 
       {player && (
-        <div className="absolute top-8 left-1/2 -translate-x-1/2 w-[600px] bg-[#c0c0c0] border-t-[#ffffff] border-l-[#ffffff] border-b-[#000000] border-r-[#000000] border-[3px] p-2 flex flex-col gap-1 z-20 shadow-[4px_4px_10px_rgba(0,0,0,0.5)] text-black">
+        <div className="absolute top-8 left-1/2 -translate-x-1/2 w-[600px] bg-[#c0c0c0] border-t-[#ffffff] border-l-[#ffffff] border-b-[#000000] border-r-[#000000] border-[3px] p-2 flex flex-col gap-1 z-20 shadow-[4px_4px_10px_rgba(0,0,0,0.5)]">
           <div className="flex justify-between items-end font-bold text-sm px-1">
             <span className="tracking-widest">PLAYER LEVEL {player.level}</span>
             <span className="text-[11px] text-[#000080]">{player.xp} TOTAL XP</span>
@@ -135,14 +174,13 @@ export default function Home() {
         </div>
       )}
 
-      {/* The Desktop Layout */}
       <div className="relative z-10 w-full p-8 flex justify-center items-start pt-32 gap-6 flex-wrap max-w-[1400px] mx-auto">
         
         {/* COLUMN 1: Inputs & Memory */}
-        <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-6 w-[320px]">
           
           {/* WINDOW 1: The Quest Terminal */}
-          <Window title="Quest Terminal" width="w-[320px]">
+          <Window title="Quest Terminal" width="w-full">
             <form onSubmit={handleCreateQuest} className="flex flex-col gap-3">
               <p className="font-bold border-b border-[#808080] pb-1">Register New Quest</p>
               
@@ -153,7 +191,7 @@ export default function Home() {
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   className="p-1 text-[13px] border-t-[#808080] border-l-[#808080] border-b-[#ffffff] border-r-[#ffffff] border-2 bg-white outline-none focus:bg-blue-50"
-                  placeholder="e.g. Finish Math Homework"
+                  placeholder="e.g. App Presentation"
                   disabled={isSubmitting}
                 />
               </div>
@@ -185,14 +223,51 @@ export default function Home() {
                 />
               </div>
 
-              <div className="flex items-center gap-2 mt-1">
+              {/* --- NEW: SUBTASK BUILDER --- */}
+              <div className="flex flex-col gap-1 mt-1 border-t border-dashed border-[#808080] pt-2">
+                <label className="text-[12px] font-bold">Sub-Objectives (Optional):</label>
+                <div className="flex gap-1">
+                  <input 
+                    type="text" 
+                    value={subtaskInput}
+                    onChange={(e) => setSubtaskInput(e.target.value)}
+                    className="flex-1 p-1 text-[12px] border-t-[#808080] border-l-[#808080] border-b-[#ffffff] border-r-[#ffffff] border-2 bg-white outline-none"
+                    placeholder="e.g. Write slide deck"
+                    disabled={isSubmitting || isDaily} // Disable for daily habits
+                  />
+                  <button 
+                    onClick={handleAddSubtask}
+                    disabled={isSubmitting || isDaily || !subtaskInput.trim()}
+                    className="bg-[#c0c0c0] px-2 text-[12px] font-bold border-t-[#ffffff] border-l-[#ffffff] border-b-[#000000] border-r-[#000000] border-2 active:border-t-[#000000] active:border-l-[#000000] active:border-b-[#ffffff] active:border-r-[#ffffff] disabled:opacity-50"
+                  >
+                    +
+                  </button>
+                </div>
+                {/* Render the mini-list before submitting */}
+                {subtasks.length > 0 && (
+                  <ul className="mt-1 flex flex-col gap-1 bg-white border-t-[#808080] border-l-[#808080] border-b-[#ffffff] border-r-[#ffffff] border-2 p-1 max-h-[80px] overflow-y-auto">
+                    {subtasks.map((st, idx) => (
+                      <li key={idx} className="flex justify-between items-center text-[11px] bg-blue-50 px-1 border border-blue-200">
+                        <span className="truncate mr-2">- {st}</span>
+                        <button onClick={() => handleRemoveSubtask(idx)} type="button" className="text-red-600 font-bold hover:bg-red-200 px-1">X</button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2 mt-2">
                 <input 
                   type="checkbox" 
                   id="daily-check"
                   checked={isDaily}
                   onChange={(e) => {
                     setIsDaily(e.target.checked);
-                    if (e.target.checked) setDueDate(""); 
+                    if (e.target.checked) {
+                      setDueDate(""); 
+                      setSubtasks([]); // Dailies can't have subtasks right now
+                      setSubtaskInput("");
+                    }
                   }}
                   className="cursor-pointer border-2 border-black"
                   disabled={isSubmitting}
@@ -214,8 +289,8 @@ export default function Home() {
             </form>
           </Window>
 
-          {/* WINDOW 3: The Scratchpad (Moved under the terminal!) */}
-          <Window title="Brain Dump" width="w-[320px]">
+          {/* WINDOW 3: The Scratchpad */}
+          <Window title="Brain Dump" width="w-full">
             <div className="flex flex-col gap-2">
               <p className="font-bold border-b border-[#808080] pb-1">System Scratchpad</p>
               <textarea 
@@ -246,23 +321,45 @@ export default function Home() {
             {error && <p className="text-[13px] text-red-600 font-bold">CRITICAL ERROR</p>}
             
             {tasks && tasks.length > 0 ? (
-              <ul className="mt-2 flex flex-col gap-2 max-h-[460px] overflow-y-auto pr-2">
+              <ul className="mt-2 flex flex-col gap-3 max-h-[500px] overflow-y-auto pr-2">
                 {tasks.map((task: Task) => (
-                  <li key={task.id} className="text-[13px] flex items-start gap-2 group">
-                    <button 
-                      onClick={() => handleCompleteQuest(task.id)}
-                      className="w-4 h-4 mt-[2px] shrink-0 bg-white border-t-[#808080] border-l-[#808080] border-b-[#ffffff] border-r-[#ffffff] border-2 flex items-center justify-center hover:bg-green-200 active:bg-green-400 active:border-t-[#000000] active:border-l-[#000000]"
-                      title="Complete Quest"
-                    ></button>
-                    
-                    <div className="flex flex-col leading-tight">
-                      <span>
-                        {task.title} 
-                        {task.is_daily && <span className="ml-2 text-[10px] bg-[#000080] text-white px-1 py-[1px] tracking-wider font-bold">DAILY</span>}
-                        {task.due_date && <span className="ml-2 text-[10px] bg-red-600 text-white px-1 py-[1px] tracking-wider font-bold">DUE: {task.due_date}</span>}
-                      </span>
-                      <span className="text-[11px] text-[#808080] font-bold">REWARD: {task.xp_reward} XP</span>
+                  <li key={task.id} className="flex flex-col gap-1 border-b border-dashed border-[#c0c0c0] pb-2 last:border-0">
+                    {/* The Main Quest Line */}
+                    <div className="flex items-start gap-2 group">
+                      <button 
+                        onClick={() => handleCompleteQuest(task.id)}
+                        className="w-4 h-4 mt-[2px] shrink-0 bg-white border-t-[#808080] border-l-[#808080] border-b-[#ffffff] border-r-[#ffffff] border-2 flex items-center justify-center hover:bg-green-200 active:bg-green-400 active:border-t-[#000000] active:border-l-[#000000]"
+                        title="Complete Quest"
+                      ></button>
+                      
+                      <div className="flex flex-col leading-tight w-full">
+                        <span>
+                          {task.title} 
+                          {task.is_daily && <span className="ml-2 text-[10px] bg-[#000080] text-white px-1 py-[1px] tracking-wider font-bold">DAILY</span>}
+                          {task.due_date && <span className="ml-2 text-[10px] bg-red-600 text-white px-1 py-[1px] tracking-wider font-bold">DUE: {task.due_date}</span>}
+                        </span>
+                        <span className="text-[11px] text-[#808080] font-bold">REWARD: {task.xp_reward} XP</span>
+                      </div>
                     </div>
+
+                    {/* --- NEW: The Subtasks Checklist Render --- */}
+                    {task.subtasks && task.subtasks.length > 0 && (
+                      <div className="ml-6 pl-2 border-l-2 border-[#808080] flex flex-col gap-1 mt-1">
+                        {task.subtasks.map((sub) => (
+                          <div key={sub.id} className="flex items-center gap-2">
+                            <input 
+                              type="checkbox" 
+                              checked={sub.is_completed}
+                              onChange={() => handleToggleSubtask(sub.id)}
+                              className="cursor-pointer border border-[#808080]"
+                            />
+                            <span className={`text-[12px] ${sub.is_completed ? 'line-through text-[#808080]' : 'text-black'}`}>
+                              {sub.title}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </li>
                 ))}
               </ul>
