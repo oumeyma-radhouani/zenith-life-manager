@@ -5,40 +5,33 @@ import useSWR from "swr";
 import { useState, useEffect } from "react"; 
 import Window from "../components/Window";
 import Calendar from "../components/Calendar";
+import { createClient } from "@supabase/supabase-js"; // <-- NEW: Security Tool
+
+// --- SYSTEM SECURITY KEYS (NOW SECURED!) ---
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 // --- TYPESCRIPT BLUEPRINTS ---
-interface Subtask {
-  id: number;
-  title: string;
-  is_completed: boolean;
-}
-
-interface Task {
-  id: string;
-  title: string;
-  xp_reward: number;
-  is_daily: boolean;
-  due_date: string | null; 
-  subtasks?: Subtask[]; 
-}
-
-interface Transaction {
-  id: number;
-  title: string;
-  amount: number;
-  is_income: boolean;
-}
+interface Subtask { id: number; title: string; is_completed: boolean; }
+interface Task { id: string; title: string; xp_reward: number; is_daily: boolean; due_date: string | null; subtasks?: Subtask[]; }
+interface Transaction { id: number; title: string; amount: number; is_income: boolean; }
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
 export default function Home() {
+  // --- AUTHENTICATION STATE ---
+  const [session, setSession] = useState<any>(null);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [authError, setAuthError] = useState("");
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+
   const { data: tasks, error, isLoading, mutate: mutateTasks } = useSWR("http://localhost:8000/tasks/", fetcher);
   const { data: player, mutate: mutatePlayer } = useSWR("http://localhost:8000/tasks/player", fetcher);
   const { data: note, mutate: mutateNote } = useSWR("http://localhost:8000/notes/", fetcher); 
-  // --- NEW: FINANCE VAULT CONNECTION ---
   const { data: financeData, mutate: mutateFinances } = useSWR("http://localhost:8000/finances/", fetcher);
   
-  // --- TASK STATE ---
   const [title, setTitle] = useState("");
   const [difficulty, setDifficulty] = useState("minion"); 
   const [isDaily, setIsDaily] = useState(false);
@@ -49,133 +42,171 @@ export default function Home() {
   const [subtasks, setSubtasks] = useState<string[]>([]);
   const [subtaskInput, setSubtaskInput] = useState("");
 
-  // --- NOTE STATE ---
   const [noteText, setNoteText] = useState("");
   const [isSavingNote, setIsSavingNote] = useState(false);
 
-  // --- NEW: FINANCE STATE ---
   const [financeTitle, setFinanceTitle] = useState("");
   const [financeAmount, setFinanceAmount] = useState("");
   const [isIncome, setIsIncome] = useState(false);
   const [isSubmittingFinance, setIsSubmittingFinance] = useState(false);
 
+  // --- AUTHENTICATION LISTENER ---
   useEffect(() => {
-    if (note && noteText === "") {
-      setNoteText(note.content || "");
-    }
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (note && noteText === "") setNoteText(note.content || "");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [note]);
 
-  // --- TASK HANDLERS ---
-  const handleAddSubtask = (e: React.MouseEvent) => {
+  // --- LOGIN FUNCTION ---
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (subtaskInput.trim()) {
-      setSubtasks([...subtasks, subtaskInput.trim()]);
-      setSubtaskInput("");
-    }
+    setIsLoggingIn(true);
+    setAuthError("");
+
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    
+    if (error) setAuthError(error.message);
+    setIsLoggingIn(false);
   };
 
-  const handleRemoveSubtask = (index: number) => {
-    setSubtasks(subtasks.filter((_, i) => i !== index));
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
   };
+
+  // --- SYSTEM LOGIC (TASKS, NOTES, FINANCES) ---
+  const handleAddSubtask = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (subtaskInput.trim()) { setSubtasks([...subtasks, subtaskInput.trim()]); setSubtaskInput(""); }
+  };
+
+  const handleRemoveSubtask = (index: number) => { setSubtasks(subtasks.filter((_, i) => i !== index)); };
 
   const handleCreateQuest = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
     setIsSubmitting(true);
-
     await fetch("http://localhost:8000/tasks/", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ 
-        title, 
-        difficulty, 
-        is_daily: isDaily,
-        due_date: dueDate ? dueDate : null,
-        subtasks: subtasks 
-      }),
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title, difficulty, is_daily: isDaily, due_date: dueDate ? dueDate : null, subtasks: subtasks }),
     });
-
-    setTitle(""); 
-    setDifficulty("minion"); 
-    setIsDaily(false); 
-    setDueDate(""); 
-    setSubtasks([]); 
-    mutateTasks(); 
-    setIsSubmitting(false);
+    setTitle(""); setDifficulty("minion"); setIsDaily(false); setDueDate(""); setSubtasks([]); 
+    mutateTasks(); setIsSubmitting(false);
   };
 
   const handleToggleSubtask = async (subtaskId: number) => {
-    await fetch(`http://localhost:8000/tasks/subtasks/${subtaskId}`, {
-      method: "PUT",
-    });
-    mutateTasks(); 
+    await fetch(`http://localhost:8000/tasks/subtasks/${subtaskId}`, { method: "PUT" }); mutateTasks(); 
   };
 
   const handleCompleteQuest = async (id: string) => {
-    const response = await fetch(`http://localhost:8000/tasks/${id}`, {
-      method: "DELETE",
-    });
+    const response = await fetch(`http://localhost:8000/tasks/${id}`, { method: "DELETE" });
     const data = await response.json();
-    
-    if (data.error) {
-      alert(`SYSTEM WARNING: ${data.error}`);
-      return;
-    }
-
-    if (player && data.new_level > player.level) {
-      setLevelUpData({ level: data.new_level, xp: data.new_total_xp });
-    }
-    
-    mutateTasks(); 
-    mutatePlayer(); 
+    if (data.error) { alert(`SYSTEM WARNING: ${data.error}`); return; }
+    if (player && data.new_level > player.level) { setLevelUpData({ level: data.new_level, xp: data.new_total_xp }); }
+    mutateTasks(); mutatePlayer(); 
   };
 
   const handleSaveNote = async () => {
     setIsSavingNote(true);
-    await fetch("http://localhost:8000/notes/", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: noteText }),
-    });
-    mutateNote();
-    setIsSavingNote(false);
+    await fetch("http://localhost:8000/notes/", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content: noteText }) });
+    mutateNote(); setIsSavingNote(false);
   };
 
-  // --- NEW: FINANCE HANDLERS ---
   const handleAddFinance = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!financeTitle.trim() || !financeAmount) return;
     setIsSubmittingFinance(true);
-
     await fetch("http://localhost:8000/finances/", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ 
-        title: financeTitle, 
-        amount: parseFloat(financeAmount), 
-        is_income: isIncome 
-      }),
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: financeTitle, amount: parseFloat(financeAmount), is_income: isIncome }),
     });
-
-    setFinanceTitle(""); 
-    setFinanceAmount(""); 
-    setIsIncome(false);
-    mutateFinances(); 
-    setIsSubmittingFinance(false);
+    setFinanceTitle(""); setFinanceAmount(""); setIsIncome(false); mutateFinances(); setIsSubmittingFinance(false);
   };
 
   const handleDeleteFinance = async (id: number) => {
-    await fetch(`http://localhost:8000/finances/${id}`, { method: "DELETE" });
-    mutateFinances();
+    await fetch(`http://localhost:8000/finances/${id}`, { method: "DELETE" }); mutateFinances();
   };
 
+  // ==========================================
+  // VIEW 1: THE LOGIN TERMINAL
+  // ==========================================
+  if (!session) {
+    return (
+      <main className="w-screen h-screen bg-black text-[#00ff00] font-mono flex flex-col items-center justify-center p-4">
+        <div className="w-[400px] border-2 border-[#00ff00] p-8 shadow-[0_0_20px_rgba(0,255,0,0.3)] bg-black/90 relative overflow-hidden">
+          {/* Retro scanline effect */}
+          <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.25)_50%),linear-gradient(90deg,rgba(255,0,0,0.06),rgba(0,255,0,0.02),rgba(0,0,255,0.06))] bg-[length:100%_4px,3px_100%] z-50 opacity-20"></div>
+          
+          <h1 className="text-3xl font-bold mb-2 tracking-widest text-center animate-pulse">ZENITH OS</h1>
+          <p className="text-[10px] mb-8 text-center border-b border-[#00ff00] pb-2 tracking-widest uppercase">Unauthorized Access Prohibited</p>
+
+          <form onSubmit={handleLogin} className="flex flex-col gap-5 relative z-10">
+            <div className="flex flex-col gap-1">
+              <label className="text-[11px] font-bold tracking-wider">IDENTIFICATION (EMAIL):</label>
+              <input 
+                type="email" 
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="bg-black border border-[#00ff00] text-[#00ff00] p-2 outline-none focus:bg-[#002200] focus:shadow-[0_0_10px_#00ff00] transition-all"
+                required
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-[11px] font-bold tracking-wider">SECURITY PASSPHRASE:</label>
+              <input 
+                type="password" 
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="bg-black border border-[#00ff00] text-[#00ff00] p-2 outline-none focus:bg-[#002200] focus:shadow-[0_0_10px_#00ff00] transition-all"
+                required
+              />
+            </div>
+            
+            {authError && <p className="text-red-500 text-[11px] mt-1 font-bold animate-pulse">ERROR: {authError}</p>}
+            
+            <button 
+              type="submit"
+              disabled={isLoggingIn}
+              className="mt-4 border-2 border-[#00ff00] p-3 hover:bg-[#00ff00] hover:text-black transition-colors font-bold tracking-widest disabled:opacity-50"
+            >
+              {isLoggingIn ? "VERIFYING CREDENTIALS..." : "INITIALIZE LOGIN"}
+            </button>
+          </form>
+        </div>
+      </main>
+    );
+  }
+
+  // ==========================================
+  // VIEW 2: THE SECURE DESKTOP
+  // ==========================================
   return (
     <main className="relative w-screen h-screen overflow-x-hidden overflow-y-auto pb-10 text-black">
       
+      {/* Background Layer */}
       <div className="fixed inset-0 z-0 pointer-events-none">
         <Image src="/sky.png" alt="Zenith OS Background" fill className="object-cover" priority />
         <div className="absolute inset-0 bg-black/10 mix-blend-overlay"></div>
+      </div>
+
+      {/* --- NEW: SYSTEM LOGOUT BUTTON --- */}
+      <div className="absolute top-4 right-8 z-50">
+        <button 
+          onClick={handleLogout}
+          className="bg-[#c0c0c0] px-4 py-1 text-[11px] font-bold tracking-widest border-t-[#ffffff] border-l-[#ffffff] border-b-[#000000] border-r-[#000000] border-2 active:border-t-[#000000] active:border-l-[#000000] active:border-b-[#ffffff] active:border-r-[#ffffff] shadow-[2px_2px_5px_rgba(0,0,0,0.5)]"
+        >
+          [ SYSTEM LOGOUT ]
+        </button>
       </div>
 
       {levelUpData && (
@@ -215,6 +246,7 @@ export default function Home() {
         </div>
       )}
 
+      {/* The Desktop Layout */}
       <div className="relative z-10 w-full p-8 flex justify-center items-start pt-32 gap-6 flex-wrap max-w-[1400px] mx-auto">
         
         {/* COLUMN 1: Inputs & Memory */}
@@ -412,11 +444,8 @@ export default function Home() {
             <Calendar tasks={tasks || []} />
           </Window>
 
-          {/* --- NEW WINDOW: THE FINANCIAL VAULT --- */}
           <Window title="Financial Vault" width="w-full">
             <div className="flex flex-col gap-3">
-              
-              {/* Retro Balance Display */}
               <div className="bg-black text-[#00ff00] p-3 text-center border-t-[#808080] border-l-[#808080] border-b-[#ffffff] border-r-[#ffffff] border-2">
                 <p className="text-[10px] text-[#00cc00] tracking-widest uppercase">Current Balance</p>
                 <p className="text-3xl font-bold tracking-widest">
@@ -424,7 +453,6 @@ export default function Home() {
                 </p>
               </div>
 
-              {/* Input Form */}
               <form onSubmit={handleAddFinance} className="flex gap-2 items-end border-b border-[#808080] pb-3">
                 <div className="flex flex-col gap-1 flex-1">
                   <label className="text-[11px] font-bold">Ledger Entry:</label>
@@ -473,7 +501,6 @@ export default function Home() {
                 </button>
               </form>
 
-              {/* The Ledger List */}
               <ul className="flex flex-col gap-1 max-h-[120px] overflow-y-auto pr-1">
                 {financeData && financeData.transactions.map((t: Transaction) => (
                   <li key={t.id} className="flex justify-between items-center text-[12px] bg-white p-1 border-t-[#808080] border-l-[#808080] border-b-[#ffffff] border-r-[#ffffff] border-[1px] group">
