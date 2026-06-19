@@ -6,7 +6,7 @@ import { useState, useEffect } from "react";
 import Window from "../components/Window";
 import Calendar from "../components/Calendar";
 
-// --- TYPESCRIPT BLUEPRINT ---
+// --- TYPESCRIPT BLUEPRINTS ---
 interface Subtask {
   id: number;
   title: string;
@@ -19,7 +19,14 @@ interface Task {
   xp_reward: number;
   is_daily: boolean;
   due_date: string | null; 
-  subtasks?: Subtask[]; // <-- NEW: It now expects a checklist!
+  subtasks?: Subtask[]; 
+}
+
+interface Transaction {
+  id: number;
+  title: string;
+  amount: number;
+  is_income: boolean;
 }
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
@@ -28,6 +35,8 @@ export default function Home() {
   const { data: tasks, error, isLoading, mutate: mutateTasks } = useSWR("http://localhost:8000/tasks/", fetcher);
   const { data: player, mutate: mutatePlayer } = useSWR("http://localhost:8000/tasks/player", fetcher);
   const { data: note, mutate: mutateNote } = useSWR("http://localhost:8000/notes/", fetcher); 
+  // --- NEW: FINANCE VAULT CONNECTION ---
+  const { data: financeData, mutate: mutateFinances } = useSWR("http://localhost:8000/finances/", fetcher);
   
   // --- TASK STATE ---
   const [title, setTitle] = useState("");
@@ -37,13 +46,18 @@ export default function Home() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [levelUpData, setLevelUpData] = useState<{ level: number, xp: number } | null>(null);
 
-  // --- NEW: SUBTASK STATE ---
   const [subtasks, setSubtasks] = useState<string[]>([]);
   const [subtaskInput, setSubtaskInput] = useState("");
 
   // --- NOTE STATE ---
   const [noteText, setNoteText] = useState("");
   const [isSavingNote, setIsSavingNote] = useState(false);
+
+  // --- NEW: FINANCE STATE ---
+  const [financeTitle, setFinanceTitle] = useState("");
+  const [financeAmount, setFinanceAmount] = useState("");
+  const [isIncome, setIsIncome] = useState(false);
+  const [isSubmittingFinance, setIsSubmittingFinance] = useState(false);
 
   useEffect(() => {
     if (note && noteText === "") {
@@ -52,7 +66,7 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [note]);
 
-  // --- HANDLERS ---
+  // --- TASK HANDLERS ---
   const handleAddSubtask = (e: React.MouseEvent) => {
     e.preventDefault();
     if (subtaskInput.trim()) {
@@ -78,7 +92,7 @@ export default function Home() {
         difficulty, 
         is_daily: isDaily,
         due_date: dueDate ? dueDate : null,
-        subtasks: subtasks // <-- Send the checklist to Python!
+        subtasks: subtasks 
       }),
     });
 
@@ -86,7 +100,7 @@ export default function Home() {
     setDifficulty("minion"); 
     setIsDaily(false); 
     setDueDate(""); 
-    setSubtasks([]); // <-- Reset the checklist
+    setSubtasks([]); 
     mutateTasks(); 
     setIsSubmitting(false);
   };
@@ -95,7 +109,7 @@ export default function Home() {
     await fetch(`http://localhost:8000/tasks/subtasks/${subtaskId}`, {
       method: "PUT",
     });
-    mutateTasks(); // Refresh to see the checkmark!
+    mutateTasks(); 
   };
 
   const handleCompleteQuest = async (id: string) => {
@@ -104,7 +118,6 @@ export default function Home() {
     });
     const data = await response.json();
     
-    // The Python API's new bouncer!
     if (data.error) {
       alert(`SYSTEM WARNING: ${data.error}`);
       return;
@@ -127,6 +140,34 @@ export default function Home() {
     });
     mutateNote();
     setIsSavingNote(false);
+  };
+
+  // --- NEW: FINANCE HANDLERS ---
+  const handleAddFinance = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!financeTitle.trim() || !financeAmount) return;
+    setIsSubmittingFinance(true);
+
+    await fetch("http://localhost:8000/finances/", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ 
+        title: financeTitle, 
+        amount: parseFloat(financeAmount), 
+        is_income: isIncome 
+      }),
+    });
+
+    setFinanceTitle(""); 
+    setFinanceAmount(""); 
+    setIsIncome(false);
+    mutateFinances(); 
+    setIsSubmittingFinance(false);
+  };
+
+  const handleDeleteFinance = async (id: number) => {
+    await fetch(`http://localhost:8000/finances/${id}`, { method: "DELETE" });
+    mutateFinances();
   };
 
   return (
@@ -179,7 +220,6 @@ export default function Home() {
         {/* COLUMN 1: Inputs & Memory */}
         <div className="flex flex-col gap-6 w-[320px]">
           
-          {/* WINDOW 1: The Quest Terminal */}
           <Window title="Quest Terminal" width="w-full">
             <form onSubmit={handleCreateQuest} className="flex flex-col gap-3">
               <p className="font-bold border-b border-[#808080] pb-1">Register New Quest</p>
@@ -223,7 +263,6 @@ export default function Home() {
                 />
               </div>
 
-              {/* --- NEW: SUBTASK BUILDER --- */}
               <div className="flex flex-col gap-1 mt-1 border-t border-dashed border-[#808080] pt-2">
                 <label className="text-[12px] font-bold">Sub-Objectives (Optional):</label>
                 <div className="flex gap-1">
@@ -233,7 +272,7 @@ export default function Home() {
                     onChange={(e) => setSubtaskInput(e.target.value)}
                     className="flex-1 p-1 text-[12px] border-t-[#808080] border-l-[#808080] border-b-[#ffffff] border-r-[#ffffff] border-2 bg-white outline-none"
                     placeholder="e.g. Write slide deck"
-                    disabled={isSubmitting || isDaily} // Disable for daily habits
+                    disabled={isSubmitting || isDaily}
                   />
                   <button 
                     onClick={handleAddSubtask}
@@ -243,7 +282,6 @@ export default function Home() {
                     +
                   </button>
                 </div>
-                {/* Render the mini-list before submitting */}
                 {subtasks.length > 0 && (
                   <ul className="mt-1 flex flex-col gap-1 bg-white border-t-[#808080] border-l-[#808080] border-b-[#ffffff] border-r-[#ffffff] border-2 p-1 max-h-[80px] overflow-y-auto">
                     {subtasks.map((st, idx) => (
@@ -265,7 +303,7 @@ export default function Home() {
                     setIsDaily(e.target.checked);
                     if (e.target.checked) {
                       setDueDate(""); 
-                      setSubtasks([]); // Dailies can't have subtasks right now
+                      setSubtasks([]);
                       setSubtaskInput("");
                     }
                   }}
@@ -289,7 +327,6 @@ export default function Home() {
             </form>
           </Window>
 
-          {/* WINDOW 3: The Scratchpad */}
           <Window title="Brain Dump" width="w-full">
             <div className="flex flex-col gap-2">
               <p className="font-bold border-b border-[#808080] pb-1">System Scratchpad</p>
@@ -310,6 +347,7 @@ export default function Home() {
               </div>
             </div>
           </Window>
+
         </div>
 
         {/* COLUMN 2: The Present */}
@@ -324,7 +362,6 @@ export default function Home() {
               <ul className="mt-2 flex flex-col gap-3 max-h-[500px] overflow-y-auto pr-2">
                 {tasks.map((task: Task) => (
                   <li key={task.id} className="flex flex-col gap-1 border-b border-dashed border-[#c0c0c0] pb-2 last:border-0">
-                    {/* The Main Quest Line */}
                     <div className="flex items-start gap-2 group">
                       <button 
                         onClick={() => handleCompleteQuest(task.id)}
@@ -342,7 +379,6 @@ export default function Home() {
                       </div>
                     </div>
 
-                    {/* --- NEW: The Subtasks Checklist Render --- */}
                     {task.subtasks && task.subtasks.length > 0 && (
                       <div className="ml-6 pl-2 border-l-2 border-[#808080] flex flex-col gap-1 mt-1">
                         {task.subtasks.map((sub) => (
@@ -369,11 +405,98 @@ export default function Home() {
           </div>
         </Window>
 
-        {/* COLUMN 3: The Future */}
-        <Window title="Schedule Sync" width="w-[500px]">
-          <Calendar tasks={tasks || []} />
-        </Window>
+        {/* COLUMN 3: The Future & Finances */}
+        <div className="flex flex-col gap-6 w-[500px]">
+          
+          <Window title="Schedule Sync" width="w-full">
+            <Calendar tasks={tasks || []} />
+          </Window>
 
+          {/* --- NEW WINDOW: THE FINANCIAL VAULT --- */}
+          <Window title="Financial Vault" width="w-full">
+            <div className="flex flex-col gap-3">
+              
+              {/* Retro Balance Display */}
+              <div className="bg-black text-[#00ff00] p-3 text-center border-t-[#808080] border-l-[#808080] border-b-[#ffffff] border-r-[#ffffff] border-2">
+                <p className="text-[10px] text-[#00cc00] tracking-widest uppercase">Current Balance</p>
+                <p className="text-3xl font-bold tracking-widest">
+                  {financeData ? `$${financeData.balance.toFixed(2)}` : "LOADING..."}
+                </p>
+              </div>
+
+              {/* Input Form */}
+              <form onSubmit={handleAddFinance} className="flex gap-2 items-end border-b border-[#808080] pb-3">
+                <div className="flex flex-col gap-1 flex-1">
+                  <label className="text-[11px] font-bold">Ledger Entry:</label>
+                  <input 
+                    type="text" 
+                    value={financeTitle}
+                    onChange={(e) => setFinanceTitle(e.target.value)}
+                    placeholder="e.g. Steam Sale"
+                    className="p-1 text-[12px] border-t-[#808080] border-l-[#808080] border-b-[#ffffff] border-r-[#ffffff] border-2 outline-none"
+                    disabled={isSubmittingFinance}
+                  />
+                </div>
+                
+                <div className="flex flex-col gap-1 w-[80px]">
+                  <label className="text-[11px] font-bold">Amount:</label>
+                  <input 
+                    type="number" 
+                    step="0.01"
+                    value={financeAmount}
+                    onChange={(e) => setFinanceAmount(e.target.value)}
+                    placeholder="0.00"
+                    className="p-1 text-[12px] border-t-[#808080] border-l-[#808080] border-b-[#ffffff] border-r-[#ffffff] border-2 outline-none"
+                    disabled={isSubmittingFinance}
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1 w-[80px]">
+                  <label className="text-[11px] font-bold">Type:</label>
+                  <select 
+                    value={isIncome ? "income" : "expense"}
+                    onChange={(e) => setIsIncome(e.target.value === "income")}
+                    className="p-1 text-[12px] border-t-[#808080] border-l-[#808080] border-b-[#ffffff] border-r-[#ffffff] border-2 outline-none cursor-pointer"
+                    disabled={isSubmittingFinance}
+                  >
+                    <option value="expense">Expense</option>
+                    <option value="income">Income</option>
+                  </select>
+                </div>
+
+                <button 
+                  type="submit"
+                  disabled={isSubmittingFinance || !financeTitle.trim() || !financeAmount}
+                  className="bg-[#c0c0c0] px-3 py-1 text-[12px] font-bold border-t-[#ffffff] border-l-[#ffffff] border-b-[#000000] border-r-[#000000] border-2 active:border-t-[#000000] active:border-l-[#000000] active:border-b-[#ffffff] active:border-r-[#ffffff] disabled:opacity-50"
+                >
+                  ADD
+                </button>
+              </form>
+
+              {/* The Ledger List */}
+              <ul className="flex flex-col gap-1 max-h-[120px] overflow-y-auto pr-1">
+                {financeData && financeData.transactions.map((t: Transaction) => (
+                  <li key={t.id} className="flex justify-between items-center text-[12px] bg-white p-1 border-t-[#808080] border-l-[#808080] border-b-[#ffffff] border-r-[#ffffff] border-[1px] group">
+                    <span className="truncate w-[200px]">{t.title}</span>
+                    <div className="flex items-center gap-2">
+                      <span className={`font-bold ${t.is_income ? "text-green-600" : "text-red-600"}`}>
+                        {t.is_income ? "+" : "-"}${t.amount.toFixed(2)}
+                      </span>
+                      <button 
+                        onClick={() => handleDeleteFinance(t.id)}
+                        className="text-[10px] text-red-600 opacity-0 group-hover:opacity-100 font-bold hover:bg-red-100 px-1"
+                      >
+                        X
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+
+            </div>
+          </Window>
+          
+        </div>
       </div>
     </main>
   );
