@@ -20,8 +20,9 @@ export default function Home() {
   const [authError, setAuthError] = useState("");
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   
-  // --- NEW: Day/Night Cycle State ---
+  // --- STATE ENGINES ---
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const [isStartMenuOpen, setIsStartMenuOpen] = useState(false);
 
   const { data: tasks, mutate: mutateTasks } = useSWR("http://localhost:8000/tasks/", fetcher);
   const { data: player, mutate: mutatePlayer } = useSWR("http://localhost:8000/tasks/player", fetcher);
@@ -38,6 +39,12 @@ export default function Home() {
 
   const toggleMinimize = (key: keyof typeof windows) => {
     setWindows(prev => ({ ...prev, [key]: { ...prev[key], isMinimized: !prev[key].isMinimized } }));
+  };
+
+  // Helper to open apps directly from the Start Menu
+  const launchApp = (key: keyof typeof windows) => {
+    setWindows(prev => ({ ...prev, [key]: { ...prev[key], isMinimized: false } }));
+    setIsStartMenuOpen(false); 
   };
 
   const [title, setTitle] = useState("");
@@ -70,7 +77,11 @@ export default function Home() {
     setIsLoggingIn(false);
   };
 
-  const handleLogout = async () => await supabase.auth.signOut();
+  const handleLogout = async () => {
+    setIsStartMenuOpen(false);
+    await supabase.auth.signOut();
+  };
+
   const handleAddSubtask = (e: any) => { e.preventDefault(); if (subtaskInput.trim()) { setSubtasks([...subtasks, subtaskInput.trim()]); setSubtaskInput(""); } };
   const handleRemoveSubtask = (index: number) => setSubtasks(subtasks.filter((_, i) => i !== index));
   const handleCreateQuest = async (e: any) => {
@@ -96,8 +107,27 @@ export default function Home() {
 
   if (!session) {
     return (
-      <main className="w-screen h-screen bg-[#dfdfdf] text-black text-xl flex flex-col items-center justify-center p-4" style={{ backgroundImage: 'repeating-linear-gradient(45deg, #dfdfdf 25%, transparent 25%, transparent 75%, #dfdfdf 75%, #dfdfdf), repeating-linear-gradient(45deg, #dfdfdf 25%, #d0d0d0 25%, #d0d0d0 75%, #dfdfdf 75%, #dfdfdf)', backgroundPosition: '0 0, 4px 4px', backgroundSize: '8px 8px' }}>
-        <div className="w-[400px] border-[2px] border-black p-8 bg-white relative overflow-hidden shadow-[8px_8px_0px_rgba(0,0,0,1)]">
+      <main className="relative w-screen h-screen overflow-hidden text-black text-xl flex flex-col items-center justify-center p-4 bg-[#6c42ab]">
+        
+        {/* --- STARRY LOGIN PARALLAX BACKGROUND --- */}
+        <div className="fixed inset-0 z-0 pointer-events-none">
+          {/* Base Layer - Scaled 5% from the bottom to hide the dirty image artifact! */}
+          <div className="absolute inset-0 parallax-layer scale-[1.05] origin-bottom" style={{ backgroundImage: "url('/1_starry.png')" }}></div>
+          
+          {/* Stars (Slowest) */}
+          <div className="absolute inset-0 parallax-layer" style={{ backgroundImage: "url('/6_starry.png')", animation: "pan-left 300s linear infinite" }}></div>
+          {/* Back Mountains/Clouds */}
+          <div className="absolute inset-0 parallax-layer" style={{ backgroundImage: "url('/2_starry.png')", animation: "pan-left 200s linear infinite" }}></div>
+          {/* Mid Clouds */}
+          <div className="absolute inset-0 parallax-layer" style={{ backgroundImage: "url('/3_starry.png')", animation: "pan-left 150s linear infinite" }}></div>
+          {/* Foreground Clouds */}
+          <div className="absolute inset-0 parallax-layer" style={{ backgroundImage: "url('/4_starry.png')", animation: "pan-left 100s linear infinite" }}></div>
+          {/* Foreground Silhouette (Fastest) */}
+          <div className="absolute inset-0 parallax-layer" style={{ backgroundImage: "url('/5_starry.png')", animation: "pan-left 60s linear infinite" }}></div>
+        </div>
+
+        {/* LOGIN BOX */}
+        <div className="w-[400px] border-[2px] border-black p-8 bg-white relative z-10 overflow-hidden shadow-[8px_8px_0px_rgba(0,0,0,1)]">
           <h1 className="text-5xl font-bold mb-2 tracking-widest text-center text-black">ZENITH OS</h1>
           <p className="text-lg mb-8 text-center border-b-[2px] border-black pb-2 tracking-widest uppercase">System Initialization</p>
           <form onSubmit={handleLogin} className="flex flex-col gap-5 relative z-10">
@@ -115,10 +145,9 @@ export default function Home() {
     <main className="relative w-screen h-screen overflow-hidden text-black bg-black">
       
       {/* --- DAY/NIGHT PARALLAX ENGINE --- */}
-      {/* The base color transitions smoothly between light sky blue and dark navy */}
       <div className={`fixed inset-0 z-0 pointer-events-none transition-colors duration-1000 ease-in-out ${isDarkMode ? 'bg-[#0f172a]' : 'bg-[#1ca3ec]'}`}>
         
-        {/* LIGHT MODE LAYERS (Fades out when dark mode is true) */}
+        {/* LIGHT MODE LAYERS */}
         <div className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${isDarkMode ? 'opacity-0' : 'opacity-100'}`}>
           <div className="absolute inset-0 parallax-layer" style={{ backgroundImage: "url('/1.png')" }}></div>
           <div className="absolute inset-0 parallax-layer opacity-90" style={{ backgroundImage: "url('/2.png')", animation: "pan-left 180s linear infinite" }}></div>
@@ -126,19 +155,14 @@ export default function Home() {
           <div className="absolute inset-0 parallax-layer" style={{ backgroundImage: "url('/4.png')", animation: "pan-left 60s linear infinite" }}></div>
         </div>
 
-        {/* DARK MODE LAYERS (Fades in when dark mode is true) */}
+        {/* DARK MODE LAYERS */}
         <div className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${isDarkMode ? 'opacity-100' : 'opacity-0'}`}>
           <div className="absolute inset-0 parallax-layer" style={{ backgroundImage: "url('/1_dark.png')" }}></div>
-          {/* Moon animates super slowly (300s) to drift across the sky naturally */}
           <div className="absolute inset-0 parallax-layer" style={{ backgroundImage: "url('/2_dark.png')", animation: "pan-left 300s linear infinite" }}></div>
           <div className="absolute inset-0 parallax-layer" style={{ backgroundImage: "url('/3_dark.png')", animation: "pan-left 120s linear infinite" }}></div>
           <div className="absolute inset-0 parallax-layer" style={{ backgroundImage: "url('/4_dark.png')", animation: "pan-left 60s linear infinite" }}></div>
         </div>
 
-      </div>
-
-      <div className="absolute top-4 right-8 z-40">
-        <button onClick={handleLogout} className="bg-white hover:bg-[#5b7c99] hover:text-white px-4 py-1 text-lg font-bold tracking-widest border-[2px] border-black shadow-[3px_3px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-[3px] active:translate-y-[3px] transition-all">[ LOG OUT ]</button>
       </div>
 
       {/* SIDEBAR DESKTOP ICONS */}
@@ -253,13 +277,72 @@ export default function Home() {
         )}
       </div>
 
-      {/* --- TASKBAR UPGRADE: Added the Dark Mode Toggle Switch --- */}
-      <div className="fixed bottom-0 left-0 w-full h-12 bg-[#dfdfdf] border-t-[2px] border-black flex items-center px-2 z-[100] justify-between">
+      {/* --- START MENU OVERLAY (Closes menu if you click the desktop) --- */}
+      {isStartMenuOpen && (
+        <div 
+          className="fixed inset-0 z-[95]" 
+          onClick={() => setIsStartMenuOpen(false)}
+        ></div>
+      )}
+
+      {/* --- THE START MENU --- */}
+      {isStartMenuOpen && (
+        <div className="fixed bottom-[48px] left-0 z-[101] bg-[#dfdfdf] border-[2px] border-black shadow-[4px_4px_0px_rgba(0,0,0,1)] flex min-h-[350px]">
+          
+          {/* Left Vertical Branding Stripe */}
+          <div className="w-10 bg-[#5b7c99] flex flex-col justify-end items-center pb-2 border-r-[2px] border-black">
+            <span className="text-white font-bold tracking-widest text-2xl drop-shadow-[1px_1px_0px_rgba(0,0,0,0.8)] whitespace-nowrap -rotate-90 mb-12">
+              ZENITH OS
+            </span>
+          </div>
+
+          {/* Right App List */}
+          <div className="flex flex-col flex-1 py-1 min-w-[220px] justify-between">
+            <div className="flex flex-col">
+              {(Object.keys(windows) as Array<keyof typeof windows>).map((key) => {
+                const win = windows[key];
+                return (
+                  <button 
+                    key={key} 
+                    onClick={() => launchApp(key as keyof typeof windows)}
+                    className="flex items-center gap-3 px-4 py-2 hover:bg-black hover:text-white transition-colors text-black font-bold text-xl text-left"
+                  >
+                    <span className="text-2xl drop-shadow-[1px_1px_0px_rgba(0,0,0,0.3)]">{win.icon}</span>
+                    {win.title}
+                  </button>
+                )
+              })}
+            </div>
+
+            <div className="flex flex-col border-t-[2px] border-black pt-1 mt-2">
+              <button 
+                onClick={handleLogout}
+                className="flex items-center gap-3 px-4 py-2 hover:bg-black hover:text-white transition-colors text-black font-bold text-xl text-left"
+              >
+                <span className="text-2xl drop-shadow-[1px_1px_0px_rgba(0,0,0,0.3)]">🔌</span>
+                Shut Down...
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- TASKBAR UPGRADE: System Tray & Start Toggle --- */}
+      <div className="fixed bottom-0 left-0 w-full h-12 bg-[#dfdfdf] border-t-[2px] border-black flex items-center px-2 z-[100] justify-between shadow-[0px_-2px_10px_rgba(0,0,0,0.2)]">
         
         {/* LEFT SIDE: Start Button & Tabs */}
         <div className="flex items-center gap-2 overflow-x-auto flex-1 pr-2">
-          <button className="shrink-0 flex items-center gap-2 font-bold text-2xl px-3 py-1 bg-white hover:bg-[#5b7c99] hover:text-white text-black border-[2px] border-black shadow-[2px_2px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-[2px] active:translate-y-[2px] transition-all">
-            <div className="w-4 h-4 bg-black border border-white"></div>
+          
+          {/* THE START BUTTON */}
+          <button 
+            onClick={() => setIsStartMenuOpen(!isStartMenuOpen)}
+            className={`shrink-0 flex items-center gap-2 font-bold text-2xl px-3 py-1 border-[2px] border-black transition-all
+              ${isStartMenuOpen 
+                ? 'bg-black text-white shadow-none translate-x-[2px] translate-y-[2px]' 
+                : 'bg-white hover:bg-[#5b7c99] hover:text-white text-black shadow-[2px_2px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-[2px] active:translate-y-[2px]'
+              }`}
+          >
+            <div className={`w-4 h-4 border ${isStartMenuOpen ? 'bg-white border-black' : 'bg-black border-white'}`}></div>
             START
           </button>
           
@@ -267,16 +350,14 @@ export default function Home() {
 
           {(Object.keys(windows) as Array<keyof typeof windows>).map((key) => {
             const win = windows[key];
+            // Only show tabs on the taskbar if the window is currently OPEN
+            if (win.isMinimized) return null;
+
             return (
               <button 
                 key={key}
                 onClick={() => toggleMinimize(key)}
-                className={`shrink-0 px-3 py-1 h-9 text-xl font-bold min-w-[120px] max-w-[160px] truncate border-[2px] border-black flex items-center justify-center transition-all
-                  ${!win.isMinimized 
-                    ? 'bg-[#5b7c99] text-white shadow-none translate-x-[2px] translate-y-[2px]' 
-                    : 'bg-white text-black shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:bg-[#dfdfdf]' 
-                  }
-                `}
+                className="shrink-0 px-3 py-1 h-9 text-xl font-bold min-w-[120px] max-w-[160px] truncate border-[2px] border-black flex items-center justify-center transition-all bg-[#5b7c99] text-white shadow-none translate-x-[2px] translate-y-[2px]"
               >
                 {win.title}
               </button>
@@ -287,7 +368,6 @@ export default function Home() {
         {/* RIGHT SIDE: System Tray (Dark Mode + Player Level) */}
         <div className="flex items-center gap-2 shrink-0">
           
-          {/* THE DAY/NIGHT SWITCH */}
           <button 
             onClick={() => setIsDarkMode(!isDarkMode)}
             className="w-9 h-9 bg-white border-[2px] border-black flex items-center justify-center hover:bg-[#dfdfdf] transition-colors shadow-[inset_2px_2px_0px_rgba(0,0,0,0.2)] text-xl"
@@ -297,7 +377,7 @@ export default function Home() {
           </button>
 
           {player && (
-            <div className="flex items-center gap-2 bg-white border-[2px] border-black px-3 py-1 h-9 shadow-[inset_2px_2px_0px_rgba(0,0,0,0.2)]">
+            <div className="flex items-center gap-2 bg-white border-[2px] border-black px-3 py-1 h-9 shadow-[inset_2px_2px_0px_rgba(0,0,0,0.2)] cursor-default">
               <span className="text-[16px] font-bold tracking-widest text-[#5b7c99]">LVL {player.level}</span>
               <div className="w-24 h-3 bg-[#dfdfdf] border-[1px] border-black p-[1px]"><div className="h-full bg-[#5b7c99] transition-all duration-500 ease-out" style={{ width: `${player.xp % 100}%` }}></div></div>
               <span className="text-[14px] font-bold text-black">{player.xp} XP</span>
