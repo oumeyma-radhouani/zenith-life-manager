@@ -14,3 +14,42 @@ body {
   /* Add a subtle scanline effect to the whole desktop */
   background-color: #008080; 
 }
+
+/* --- BULLETPROOF RETRO SCROLLBAR --- */
+::-webkit-scrollbar {
+  width: 16px;
+  height: 16px;
+}
+
+::-webkit-scrollbar-track {
+  background: #dfdfdf;
+  border-left: 2px solid black;
+  border-top: 2px solid black;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #a0a0a0; /* Classic dark gray grip */
+  border: 2px solid black;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #5b7c99; /* Moody blue on hover */
+}
+
+/* This styles the little square where the vertical and horizontal scrollbars meet */
+::-webkit-scrollbar-corner {
+  background: #dfdfdf; 
+}
+
+/* --- 4-LAYER PIXEL PARALLAX ENGINE --- */
+@keyframes pan-left {
+  from { background-position: 0 bottom; }
+  to { background-position: -4000px bottom; } /* A huge offset so it loops cleanly */
+}
+
+.parallax-layer {
+  background-repeat: repeat-x;
+  background-size: auto 100%; /* Stretches the art from top to bottom while keeping proportions */
+  background-position: bottom; /* Anchors the horizon line to the bottom */
+  image-rendering: pixelated; /* Forces the pixel art to stay crunchy, preventing blurry scaling */
+}

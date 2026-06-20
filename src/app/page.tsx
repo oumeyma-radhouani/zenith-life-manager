@@ -19,6 +19,9 @@ export default function Home() {
   const [password, setPassword] = useState("");
   const [authError, setAuthError] = useState("");
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  
+  // --- NEW: Day/Night Cycle State ---
+  const [isDarkMode, setIsDarkMode] = useState(false);
 
   const { data: tasks, mutate: mutateTasks } = useSWR("http://localhost:8000/tasks/", fetcher);
   const { data: player, mutate: mutatePlayer } = useSWR("http://localhost:8000/tasks/player", fetcher);
@@ -111,9 +114,27 @@ export default function Home() {
   return (
     <main className="relative w-screen h-screen overflow-hidden text-black bg-black">
       
-      {/* PURE SKY BACKGROUND */}
-      <div className="fixed inset-0 z-0 pointer-events-none">
-        <Image src="/sky.png" alt="Zenith OS Background" fill className="object-cover" priority />
+      {/* --- DAY/NIGHT PARALLAX ENGINE --- */}
+      {/* The base color transitions smoothly between light sky blue and dark navy */}
+      <div className={`fixed inset-0 z-0 pointer-events-none transition-colors duration-1000 ease-in-out ${isDarkMode ? 'bg-[#0f172a]' : 'bg-[#1ca3ec]'}`}>
+        
+        {/* LIGHT MODE LAYERS (Fades out when dark mode is true) */}
+        <div className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${isDarkMode ? 'opacity-0' : 'opacity-100'}`}>
+          <div className="absolute inset-0 parallax-layer" style={{ backgroundImage: "url('/1.png')" }}></div>
+          <div className="absolute inset-0 parallax-layer opacity-90" style={{ backgroundImage: "url('/2.png')", animation: "pan-left 180s linear infinite" }}></div>
+          <div className="absolute inset-0 parallax-layer" style={{ backgroundImage: "url('/3.png')", animation: "pan-left 120s linear infinite" }}></div>
+          <div className="absolute inset-0 parallax-layer" style={{ backgroundImage: "url('/4.png')", animation: "pan-left 60s linear infinite" }}></div>
+        </div>
+
+        {/* DARK MODE LAYERS (Fades in when dark mode is true) */}
+        <div className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${isDarkMode ? 'opacity-100' : 'opacity-0'}`}>
+          <div className="absolute inset-0 parallax-layer" style={{ backgroundImage: "url('/1_dark.png')" }}></div>
+          {/* Moon animates super slowly (300s) to drift across the sky naturally */}
+          <div className="absolute inset-0 parallax-layer" style={{ backgroundImage: "url('/2_dark.png')", animation: "pan-left 300s linear infinite" }}></div>
+          <div className="absolute inset-0 parallax-layer" style={{ backgroundImage: "url('/3_dark.png')", animation: "pan-left 120s linear infinite" }}></div>
+          <div className="absolute inset-0 parallax-layer" style={{ backgroundImage: "url('/4_dark.png')", animation: "pan-left 60s linear infinite" }}></div>
+        </div>
+
       </div>
 
       <div className="absolute top-4 right-8 z-40">
@@ -140,64 +161,60 @@ export default function Home() {
       </div>
 
       {/* THE DESKTOP WORKSPACE */}
-      <div className="relative z-10 w-full h-full p-8 flex justify-center items-start pt-32 gap-6">
+      <div className="relative z-10 w-full h-[calc(100vh-48px)] overflow-hidden">
         
-        {/* COLUMN 1 */}
-        <div className="flex flex-col gap-6 w-[350px]">
-          {!windows.terminal.isMinimized && (
-            <Window title="Quest Terminal" width="w-full" onMinimize={() => toggleMinimize("terminal")}>
-              <form onSubmit={handleCreateQuest} className="flex flex-col gap-3">
-                <p className="font-bold border-b-[2px] border-black pb-1 text-2xl">New Objective</p>
-                <div className="flex flex-col gap-1"><label className="text-lg font-bold">Title:</label><input type="text" value={title} onChange={(e) => setTitle(e.target.value)} className="p-1 text-xl border-[2px] border-black bg-white outline-none focus:bg-[#f0f0f0]" /></div>
-                <div className="flex flex-col gap-1"><label className="text-lg font-bold">Difficulty:</label><select value={difficulty} onChange={(e) => setDifficulty(e.target.value)} className="p-1 text-xl border-[2px] border-black bg-white outline-none cursor-pointer focus:bg-[#f0f0f0]"><option value="minion">🟢 Minion</option><option value="elite">🟡 Elite</option><option value="boss">🔴 Boss Battle</option></select></div>
-                <div className="flex flex-col gap-1"><label className="text-lg font-bold">Deadline:</label><input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="p-1 text-xl border-[2px] border-black bg-white outline-none disabled:bg-[#dfdfdf] focus:bg-[#f0f0f0]" disabled={isDaily} /></div>
-                
-                <div className="flex flex-col gap-1 mt-1 border-t-[2px] border-dashed border-black pt-2">
-                  <label className="text-lg font-bold">Sub-Objectives:</label>
-                  <div className="flex gap-1"><input type="text" value={subtaskInput} onChange={(e) => setSubtaskInput(e.target.value)} className="flex-1 p-1 text-lg border-[2px] border-black bg-white outline-none focus:bg-[#f0f0f0]" disabled={isDaily}/>
-                  <button onClick={handleAddSubtask} disabled={isDaily || !subtaskInput.trim()} className="bg-[#5b7c99] hover:bg-black text-[#f9f6e6] px-4 rounded-none text-xl font-bold border-[2px] border-black shadow-[2px_2px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-[2px] active:translate-y-[2px] transition-all disabled:opacity-30">+</button></div>
-                  {subtasks.length > 0 && (
-                    <ul className="mt-2 flex flex-col gap-1 p-1 max-h-[100px] overflow-y-auto bg-white border-[2px] border-black">
-                      {subtasks.map((st, idx) => (<li key={idx} className="flex justify-between items-center text-xl bg-[#dfdfdf] px-2 py-1 border border-black"><span className="truncate mr-2">- {st}</span><button onClick={() => handleRemoveSubtask(idx)} type="button" className="text-black font-bold hover:bg-black hover:text-white px-1">X</button></li>))}
-                    </ul>
-                  )}
-                </div>
-                <div className="flex items-center gap-3 mt-2"><input type="checkbox" id="daily-check" checked={isDaily} onChange={(e) => { setIsDaily(e.target.checked); if (e.target.checked) { setDueDate(""); setSubtasks([]); setSubtaskInput(""); } }} className="cursor-pointer w-4 h-4 border-[2px] border-black accent-[#5b7c99] rounded-none" disabled={isSubmitting}/><label htmlFor="daily-check" className="text-lg font-bold cursor-pointer">Register as Daily</label></div>
-                <div className="mt-2 flex justify-end"><button type="submit" disabled={!title.trim()} className="bg-[#5b7c99] hover:bg-black text-[#f9f6e6] px-6 py-2 text-xl font-bold border-[2px] border-black shadow-[2px_2px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-[2px] active:translate-y-[2px] transition-all disabled:opacity-30">Add Quest</button></div>
-              </form>
-            </Window>
-          )}
-
-          {!windows.notes.isMinimized && (
-            <Window title="Brain Dump" width="w-full" onMinimize={() => toggleMinimize("notes")}>
-              <div className="flex flex-col gap-2">
-                <p className="font-bold border-b-[2px] border-black pb-1 text-2xl">Scratchpad</p>
-                <textarea value={noteText} onChange={(e) => setNoteText(e.target.value)} className="w-full h-[150px] p-2 text-xl bg-white border-[2px] border-black outline-none resize-none focus:bg-[#f0f0f0] transition-colors text-black" placeholder="Notes..." />
-                <div className="mt-1 flex justify-end"><button onClick={handleSaveNote} disabled={isSavingNote} className="bg-[#5b7c99] hover:bg-black text-[#f9f6e6] px-6 py-1 text-xl font-bold border-[2px] border-black shadow-[2px_2px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-[2px] active:translate-y-[2px] transition-all disabled:opacity-30">Save</button></div>
+        {!windows.terminal.isMinimized && (
+          <Window title="Quest Terminal" defaultX={120} defaultY={60} defaultWidth={350} onMinimize={() => toggleMinimize("terminal")}>
+            <form onSubmit={handleCreateQuest} className="flex flex-col gap-3 h-full">
+              <p className="font-bold border-b-[2px] border-black pb-1 text-2xl shrink-0">New Objective</p>
+              <div className="flex flex-col gap-1 shrink-0"><label className="text-lg font-bold">Title:</label><input type="text" value={title} onChange={(e) => setTitle(e.target.value)} className="w-full p-1 text-xl border-[2px] border-black bg-white outline-none focus:bg-[#f0f0f0]" /></div>
+              <div className="flex flex-col gap-1 shrink-0"><label className="text-lg font-bold">Difficulty:</label><select value={difficulty} onChange={(e) => setDifficulty(e.target.value)} className="w-full p-1 text-xl border-[2px] border-black bg-white outline-none cursor-pointer focus:bg-[#f0f0f0]"><option value="minion">🟢 Minion</option><option value="elite">🟡 Elite</option><option value="boss">🔴 Boss Battle</option></select></div>
+              <div className="flex flex-col gap-1 shrink-0"><label className="text-lg font-bold">Deadline:</label><input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="w-full p-1 text-xl border-[2px] border-black bg-white outline-none disabled:bg-[#dfdfdf] focus:bg-[#f0f0f0]" disabled={isDaily} /></div>
+              
+              <div className="flex flex-col gap-1 mt-1 border-t-[2px] border-dashed border-black pt-2 flex-1 min-h-0">
+                <label className="text-lg font-bold shrink-0">Sub-Objectives:</label>
+                <div className="flex gap-1 shrink-0"><input type="text" value={subtaskInput} onChange={(e) => setSubtaskInput(e.target.value)} className="flex-1 min-w-0 p-1 text-lg border-[2px] border-black bg-white outline-none focus:bg-[#f0f0f0]" disabled={isDaily}/>
+                <button onClick={handleAddSubtask} disabled={isDaily || !subtaskInput.trim()} className="bg-[#5b7c99] hover:bg-black text-[#f9f6e6] px-4 rounded-none text-xl font-bold border-[2px] border-black shadow-[2px_2px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-[2px] active:translate-y-[2px] transition-all disabled:opacity-30 shrink-0">+</button></div>
+                {subtasks.length > 0 && (
+                  <ul className="mt-2 flex flex-col gap-1 p-1 overflow-y-auto bg-white border-[2px] border-black flex-1">
+                    {subtasks.map((st, idx) => (<li key={idx} className="flex justify-between items-center text-xl bg-[#dfdfdf] px-2 py-1 border border-black"><span className="truncate mr-2">- {st}</span><button onClick={() => handleRemoveSubtask(idx)} type="button" className="text-black font-bold hover:bg-black hover:text-white px-1">X</button></li>))}
+                  </ul>
+                )}
               </div>
-            </Window>
-          )}
-        </div>
+              <div className="flex items-center gap-3 mt-2 shrink-0"><input type="checkbox" id="daily-check" checked={isDaily} onChange={(e) => { setIsDaily(e.target.checked); if (e.target.checked) { setDueDate(""); setSubtasks([]); setSubtaskInput(""); } }} className="cursor-pointer w-4 h-4 border-[2px] border-black accent-[#5b7c99] rounded-none" disabled={isSubmitting}/><label htmlFor="daily-check" className="text-lg font-bold cursor-pointer">Register as Daily</label></div>
+              <div className="mt-2 flex justify-end shrink-0"><button type="submit" disabled={!title.trim()} className="bg-[#5b7c99] hover:bg-black text-[#f9f6e6] px-6 py-2 text-xl font-bold border-[2px] border-black shadow-[2px_2px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-[2px] active:translate-y-[2px] transition-all disabled:opacity-30">Add Quest</button></div>
+            </form>
+          </Window>
+        )}
 
-        {/* COLUMN 2 */}
+        {!windows.notes.isMinimized && (
+          <Window title="Brain Dump" defaultX={500} defaultY={80} defaultWidth={400} onMinimize={() => toggleMinimize("notes")}>
+            <div className="flex flex-col gap-2 h-full">
+              <p className="font-bold border-b-[2px] border-black pb-1 text-2xl shrink-0">Scratchpad</p>
+              <textarea value={noteText} onChange={(e) => setNoteText(e.target.value)} className="w-full flex-1 min-h-[150px] p-2 text-xl bg-white border-[2px] border-black outline-none resize-none focus:bg-[#f0f0f0] transition-colors text-black" placeholder="Notes..." />
+              <div className="mt-1 flex justify-end shrink-0"><button onClick={handleSaveNote} disabled={isSavingNote} className="bg-[#5b7c99] hover:bg-black text-[#f9f6e6] px-6 py-1 text-xl font-bold border-[2px] border-black shadow-[2px_2px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-[2px] active:translate-y-[2px] transition-all disabled:opacity-30">Save</button></div>
+            </div>
+          </Window>
+        )}
+
         {!windows.quests.isMinimized && (
-          <Window title="Active Quests" width="w-[450px]" onMinimize={() => toggleMinimize("quests")}>
-            <div className="flex flex-col gap-2 pr-1">
-              <p className="font-bold border-b-[2px] border-black pb-1 text-2xl">Core Objectives</p>
+          <Window title="Active Quests" defaultX={150} defaultY={300} defaultWidth={450} onMinimize={() => toggleMinimize("quests")}>
+            <div className="flex flex-col gap-2 h-full">
+              <p className="font-bold border-b-[2px] border-black pb-1 text-2xl shrink-0">Core Objectives</p>
               {tasks && tasks.length > 0 ? (
-                <ul className="mt-2 flex flex-col gap-4 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar pr-3">
+                <ul className="mt-2 flex flex-col gap-4 overflow-y-auto pr-2 custom-scrollbar flex-1">
                   {tasks.map((task: Task) => (
-                    <li key={task.id} className="flex flex-col gap-2 bg-white p-2 border-[2px] border-black shadow-[2px_2px_0px_rgba(0,0,0,1)]">
+                    <li key={task.id} className="flex flex-col gap-2 bg-white p-2 border-[2px] border-black shadow-[2px_2px_0px_rgba(0,0,0,1)] shrink-0">
                       <div className="flex items-start gap-3 group">
                         <button onClick={() => handleCompleteQuest(task.id)} className="w-6 h-6 mt-[2px] shrink-0 bg-[#dfdfdf] border-[2px] border-black hover:bg-[#5b7c99] transition-colors"></button>
-                        <div className="flex flex-col leading-tight w-full">
-                          <span className="text-2xl font-bold text-black">{task.title} {task.is_daily && <span className="ml-2 text-lg bg-[#5b7c99] text-[#f9f6e6] px-1 font-bold">DAILY</span>} {task.due_date && <span className="ml-2 text-lg bg-white text-black border-[2px] border-black px-1 font-bold">DUE: {task.due_date}</span>}</span>
+                        <div className="flex flex-col leading-tight w-full min-w-0">
+                          <span className="text-2xl font-bold text-black break-words">{task.title} {task.is_daily && <span className="ml-2 text-lg bg-[#5b7c99] text-[#f9f6e6] px-1 font-bold inline-block">DAILY</span>} {task.due_date && <span className="ml-2 text-lg bg-white text-black border-[2px] border-black px-1 font-bold inline-block">DUE: {task.due_date}</span>}</span>
                           <span className="text-lg font-bold text-black mt-1 border-t-[2px] border-black border-dashed pt-1 w-fit">REWARD: {task.xp_reward} XP</span>
                         </div>
                       </div>
                       {task.subtasks && task.subtasks.length > 0 && (
                         <div className="ml-8 pl-2 border-l-[2px] border-black flex flex-col gap-1.5 mt-2">
-                          {task.subtasks.map((sub) => (<div key={sub.id} className="flex items-center gap-3"><input type="checkbox" checked={sub.is_completed} onChange={() => handleToggleSubtask(sub.id)} className="cursor-pointer w-4 h-4 accent-[#5b7c99] border-[2px] border-black"/><span className={`text-xl font-bold ${sub.is_completed ? 'line-through opacity-40 text-black' : 'text-black'}`}>{sub.title}</span></div>))}
+                          {task.subtasks.map((sub) => (<div key={sub.id} className="flex items-center gap-3"><input type="checkbox" checked={sub.is_completed} onChange={() => handleToggleSubtask(sub.id)} className="cursor-pointer w-4 h-4 accent-[#5b7c99] border-[2px] border-black shrink-0"/><span className={`text-xl font-bold break-words ${sub.is_completed ? 'line-through opacity-40 text-black' : 'text-black'}`}>{sub.title}</span></div>))}
                         </div>
                       )}
                     </li>
@@ -208,36 +225,35 @@ export default function Home() {
           </Window>
         )}
 
-        {/* COLUMN 3 */}
-        <div className="flex flex-col gap-6 w-[450px]">
-          {!windows.calendar.isMinimized && (
-            <Window title="Schedule Sync" width="w-full" onMinimize={() => toggleMinimize("calendar")}>
+        {!windows.calendar.isMinimized && (
+          <Window title="Schedule Sync" defaultX={600} defaultY={350} defaultWidth={450} onMinimize={() => toggleMinimize("calendar")}>
+            <div className="h-full overflow-auto">
               <Calendar tasks={tasks || []} />
-            </Window>
-          )}
+            </div>
+          </Window>
+        )}
 
-          {!windows.finances.isMinimized && (
-            <Window title="Financial Vault" width="w-full" onMinimize={() => toggleMinimize("finances")}>
-              <div className="flex flex-col gap-3">
-                <div className="bg-white p-3 text-center border-[2px] border-black shadow-[inset_2px_2px_0px_rgba(0,0,0,0.2)]"><p className="text-lg tracking-widest uppercase font-bold text-black">Balance</p><p className="text-4xl font-bold tracking-widest text-black mt-1">{financeData ? `$${financeData.balance.toFixed(2)}` : "..."}</p></div>
-                <form onSubmit={handleAddFinance} className="flex gap-2 items-end border-b-[2px] border-black pb-3 mt-2">
-                  <div className="flex flex-col gap-1 flex-1"><label className="text-lg font-bold text-black">Entry:</label><input type="text" value={financeTitle} onChange={(e) => setFinanceTitle(e.target.value)} className="p-1 text-xl bg-white border-[2px] border-black outline-none focus:bg-[#f0f0f0] text-black" disabled={isSubmittingFinance}/></div>
-                  <div className="flex flex-col gap-1 w-[90px]"><label className="text-lg font-bold text-black">Amt:</label><input type="number" step="0.01" value={financeAmount} onChange={(e) => setFinanceAmount(e.target.value)} className="p-1 text-xl bg-white border-[2px] border-black outline-none focus:bg-[#f0f0f0] text-black" disabled={isSubmittingFinance}/></div>
-                  <div className="flex flex-col gap-1 w-[90px]"><label className="text-lg font-bold text-black">Type:</label><select value={isIncome ? "income" : "expense"} onChange={(e) => setIsIncome(e.target.value === "income")} className="p-1 text-xl bg-white border-[2px] border-black outline-none cursor-pointer focus:bg-[#f0f0f0] text-black" disabled={isSubmittingFinance}><option value="expense">Out</option><option value="income">In</option></select></div>
-                  <button type="submit" disabled={isSubmittingFinance || !financeTitle.trim() || !financeAmount} className="bg-[#dfdfdf] hover:bg-black hover:text-white text-black px-4 py-1 text-lg font-bold border-[2px] border-black shadow-[2px_2px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-[2px] active:translate-y-[2px] transition-all disabled:opacity-30">ADD</button>
-                </form>
-                <ul className="flex flex-col gap-1 max-h-[120px] overflow-y-auto pr-1">
-                  {financeData && financeData.transactions.map((t: Transaction) => (
-                    <li key={t.id} className="flex justify-between items-center text-xl bg-white p-1 border-[2px] border-black group transition-colors"><span className="truncate w-[180px] font-bold text-black">{t.title}</span><div className="flex items-center gap-2"><span className={`font-bold ${t.is_income ? "text-black" : "text-black"}`}>{t.is_income ? "+" : "-"}${t.amount.toFixed(2)}</span><button onClick={() => handleDeleteFinance(t.id)} className="text-xl text-white bg-black opacity-0 group-hover:opacity-100 font-bold hover:bg-white hover:text-black px-2 border-[2px] border-black">X</button></div></li>
-                  ))}
-                </ul>
-              </div>
-            </Window>
-          )}
-        </div>
+        {!windows.finances.isMinimized && (
+          <Window title="Financial Vault" defaultX={700} defaultY={150} defaultWidth={400} onMinimize={() => toggleMinimize("finances")}>
+            <div className="flex flex-col gap-3 h-full">
+              <div className="bg-white p-3 text-center border-[2px] border-black shadow-[inset_2px_2px_0px_rgba(0,0,0,0.2)] shrink-0"><p className="text-lg tracking-widest uppercase font-bold text-black">Balance</p><p className="text-4xl font-bold tracking-widest text-black mt-1">{financeData ? `$${financeData.balance.toFixed(2)}` : "..."}</p></div>
+              <form onSubmit={handleAddFinance} className="flex gap-2 items-end border-b-[2px] border-black pb-3 mt-2 shrink-0">
+                <div className="flex flex-col gap-1 flex-1"><label className="text-lg font-bold text-black">Entry:</label><input type="text" value={financeTitle} onChange={(e) => setFinanceTitle(e.target.value)} className="w-full p-1 text-xl bg-white border-[2px] border-black outline-none focus:bg-[#f0f0f0] text-black" disabled={isSubmittingFinance}/></div>
+                <div className="flex flex-col gap-1 w-[90px] shrink-0"><label className="text-lg font-bold text-black">Amt:</label><input type="number" step="0.01" value={financeAmount} onChange={(e) => setFinanceAmount(e.target.value)} className="w-full p-1 text-xl bg-white border-[2px] border-black outline-none focus:bg-[#f0f0f0] text-black" disabled={isSubmittingFinance}/></div>
+                <div className="flex flex-col gap-1 w-[90px] shrink-0"><label className="text-lg font-bold text-black">Type:</label><select value={isIncome ? "income" : "expense"} onChange={(e) => setIsIncome(e.target.value === "income")} className="w-full p-1 text-xl bg-white border-[2px] border-black outline-none cursor-pointer focus:bg-[#f0f0f0] text-black" disabled={isSubmittingFinance}><option value="expense">Out</option><option value="income">In</option></select></div>
+                <button type="submit" disabled={isSubmittingFinance || !financeTitle.trim() || !financeAmount} className="bg-[#dfdfdf] hover:bg-black hover:text-white text-black px-4 py-1 text-lg font-bold border-[2px] border-black shadow-[2px_2px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-[2px] active:translate-y-[2px] transition-all disabled:opacity-30 shrink-0">ADD</button>
+              </form>
+              <ul className="flex flex-col gap-1 overflow-y-auto pr-1 flex-1 min-h-0">
+                {financeData && financeData.transactions.map((t: Transaction) => (
+                  <li key={t.id} className="flex justify-between items-center text-xl bg-white p-1 border-[2px] border-black group transition-colors shrink-0"><span className="truncate w-[180px] font-bold text-black">{t.title}</span><div className="flex items-center gap-2 shrink-0"><span className={`font-bold ${t.is_income ? "text-black" : "text-black"}`}>{t.is_income ? "+" : "-"}${t.amount.toFixed(2)}</span><button onClick={() => handleDeleteFinance(t.id)} className="text-xl text-white bg-black opacity-0 group-hover:opacity-100 font-bold hover:bg-white hover:text-black px-2 border-[2px] border-black">X</button></div></li>
+                ))}
+              </ul>
+            </div>
+          </Window>
+        )}
       </div>
 
-      {/* --- TASKBAR UPGRADE: System Tray replaces the floating HUD --- */}
+      {/* --- TASKBAR UPGRADE: Added the Dark Mode Toggle Switch --- */}
       <div className="fixed bottom-0 left-0 w-full h-12 bg-[#dfdfdf] border-t-[2px] border-black flex items-center px-2 z-[100] justify-between">
         
         {/* LEFT SIDE: Start Button & Tabs */}
@@ -268,14 +284,26 @@ export default function Home() {
           })}
         </div>
 
-        {/* RIGHT SIDE: System Tray (Player Level) */}
-        {player && (
-          <div className="shrink-0 flex items-center gap-2 bg-white border-[2px] border-black px-3 py-1 h-9 shadow-[inset_2px_2px_0px_rgba(0,0,0,0.2)]">
-            <span className="text-[16px] font-bold tracking-widest text-[#5b7c99]">LVL {player.level}</span>
-            <div className="w-24 h-3 bg-[#dfdfdf] border-[1px] border-black p-[1px]"><div className="h-full bg-[#5b7c99] transition-all duration-500 ease-out" style={{ width: `${player.xp % 100}%` }}></div></div>
-            <span className="text-[14px] font-bold text-black">{player.xp} XP</span>
-          </div>
-        )}
+        {/* RIGHT SIDE: System Tray (Dark Mode + Player Level) */}
+        <div className="flex items-center gap-2 shrink-0">
+          
+          {/* THE DAY/NIGHT SWITCH */}
+          <button 
+            onClick={() => setIsDarkMode(!isDarkMode)}
+            className="w-9 h-9 bg-white border-[2px] border-black flex items-center justify-center hover:bg-[#dfdfdf] transition-colors shadow-[inset_2px_2px_0px_rgba(0,0,0,0.2)] text-xl"
+            title="Toggle Day/Night"
+          >
+            {isDarkMode ? '🌙' : '☀️'}
+          </button>
+
+          {player && (
+            <div className="flex items-center gap-2 bg-white border-[2px] border-black px-3 py-1 h-9 shadow-[inset_2px_2px_0px_rgba(0,0,0,0.2)]">
+              <span className="text-[16px] font-bold tracking-widest text-[#5b7c99]">LVL {player.level}</span>
+              <div className="w-24 h-3 bg-[#dfdfdf] border-[1px] border-black p-[1px]"><div className="h-full bg-[#5b7c99] transition-all duration-500 ease-out" style={{ width: `${player.xp % 100}%` }}></div></div>
+              <span className="text-[14px] font-bold text-black">{player.xp} XP</span>
+            </div>
+          )}
+        </div>
       </div>
 
     </main>
