@@ -13,8 +13,6 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
-// --- ZENITH OS FULL-COLOR PIXEL ICON COMPONENT ---
-// Increased size to w-12 h-12 and added a crisp drop shadow and hover bounce
 const ColorPixelIcon = ({ src }: { src: string }) => (
   <img 
     src={src} 
@@ -34,13 +32,18 @@ export default function Home() {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [isStartMenuOpen, setIsStartMenuOpen] = useState(false);
 
+  // --- NEW: Boot/Mounting State to calculate perfect center coordinates ---
+  const [isMounted, setIsMounted] = useState(false);
+  const [centerPos, setCenterPos] = useState({ x: 100, y: 100 });
+
   const { data: tasks, mutate: mutateTasks } = useSWR("http://localhost:8000/tasks/", fetcher);
   const { data: player, mutate: mutatePlayer } = useSWR("http://localhost:8000/tasks/player", fetcher);
   const { data: note, mutate: mutateNote } = useSWR("http://localhost:8000/notes/", fetcher); 
   const { data: financeData, mutate: mutateFinances } = useSWR("http://localhost:8000/finances/", fetcher);
   
+  // THE FIX: Set terminal to true so ONLY Quests boots up open!
   const [windows, setWindows] = useState({
-    terminal: { title: "Quest Terminal", isMinimized: false, icon: <ColorPixelIcon src="/Home.png" /> },
+    terminal: { title: "Quest Terminal", isMinimized: true, icon: <ColorPixelIcon src="/Home.png" /> },
     quests: { title: "Active Quests", isMinimized: false, icon: <ColorPixelIcon src="/ChestTreasure.png" /> },
     notes: { title: "Brain Dump", isMinimized: true, icon: <ColorPixelIcon src="/Pencil.png" /> },
     calendar: { title: "Schedule Sync", isMinimized: true, icon: <ColorPixelIcon src="/Cloud.png" /> },
@@ -78,6 +81,16 @@ export default function Home() {
   }, []);
 
   useEffect(() => { if (note && noteText === "") setNoteText(note.content || ""); }, [note, noteText]);
+
+  // THE FIX: Calculate true center of screen once on mount
+  useEffect(() => {
+    setIsMounted(true);
+    // 450 is the width of the Active Quests window, 500 is its approx height
+    setCenterPos({
+      x: Math.max(50, (window.innerWidth - 450) / 2),
+      y: Math.max(50, (window.innerHeight - 500) / 2)
+    });
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault(); setIsLoggingIn(true); setAuthError("");
@@ -168,11 +181,9 @@ export default function Home() {
             <button 
               key={key} 
               onClick={() => toggleMinimize(key)}
-              // Removed the background colors and borders. Added a subtle opacity fade when a window is closed.
               className={`flex flex-col items-center gap-2 group transition-all ${!win.isMinimized ? 'opacity-40' : 'opacity-100'}`}
             >
               {win.icon}
-              {/* The Text Stroke Trick: Pure white text with a hard black outline around it */}
               <span 
                 className="text-[14px] font-bold text-white tracking-wide text-center leading-tight drop-shadow-[0px_4px_4px_rgba(0,0,0,0.5)]"
                 style={{ textShadow: '1px 1px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 0px 2px 0 #000' }}
@@ -187,21 +198,22 @@ export default function Home() {
       {/* THE DESKTOP WORKSPACE */}
       <div className="relative z-10 w-full h-[calc(100vh-48px)] overflow-hidden">
         
-        {!windows.terminal.isMinimized && (
-          <Window title="Quest Terminal" defaultX={120} defaultY={60} defaultWidth={350} onMinimize={() => toggleMinimize("terminal")}>
-            <form onSubmit={handleCreateQuest} className="flex flex-col gap-3 h-full">
+        {/* We only render the windows after the client has measured the screen (isMounted) */}
+        {isMounted && !windows.terminal.isMinimized && (
+          <Window title="Quest Terminal" defaultX={Math.max(20, centerPos.x - 400)} defaultY={Math.max(20, centerPos.y - 50)} defaultWidth={350} onMinimize={() => toggleMinimize("terminal")}>
+            <form onSubmit={handleCreateQuest} className="flex flex-col gap-3 h-full min-h-0">
               <p className="font-bold border-b-[2px] border-black pb-1 text-2xl shrink-0">New Objective</p>
               <div className="flex flex-col gap-1 shrink-0"><label className="text-lg font-bold">Title:</label><input type="text" value={title} onChange={(e) => setTitle(e.target.value)} className="w-full p-1 text-xl border-[2px] border-black bg-white outline-none focus:bg-[#f0f0f0]" /></div>
               <div className="flex flex-col gap-1 shrink-0"><label className="text-lg font-bold">Difficulty:</label><select value={difficulty} onChange={(e) => setDifficulty(e.target.value)} className="w-full p-1 text-xl border-[2px] border-black bg-white outline-none cursor-pointer focus:bg-[#f0f0f0]"><option value="minion">🟢 Minion</option><option value="elite">🟡 Elite</option><option value="boss">🔴 Boss Battle</option></select></div>
               <div className="flex flex-col gap-1 shrink-0"><label className="text-lg font-bold">Deadline:</label><input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="w-full p-1 text-xl border-[2px] border-black bg-white outline-none disabled:bg-[#dfdfdf] focus:bg-[#f0f0f0]" disabled={isDaily} /></div>
               
-              <div className="flex flex-col gap-1 mt-1 border-t-[2px] border-dashed border-black pt-2 flex-1 min-h-0">
+              <div className="flex flex-col gap-1 mt-1 border-t-[2px] border-dashed border-black pt-2 flex-1 min-h-0 overflow-hidden">
                 <label className="text-lg font-bold shrink-0">Sub-Objectives:</label>
                 <div className="flex gap-1 shrink-0"><input type="text" value={subtaskInput} onChange={(e) => setSubtaskInput(e.target.value)} className="flex-1 min-w-0 p-1 text-lg border-[2px] border-black bg-white outline-none focus:bg-[#f0f0f0]" disabled={isDaily}/>
                 <button onClick={handleAddSubtask} disabled={isDaily || !subtaskInput.trim()} className="bg-[#5b7c99] hover:bg-black text-[#f9f6e6] px-4 rounded-none text-xl font-bold border-[2px] border-black shadow-[2px_2px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-[2px] active:translate-y-[2px] transition-all disabled:opacity-30 shrink-0">+</button></div>
                 {subtasks.length > 0 && (
-                  <ul className="mt-2 flex flex-col gap-1 p-1 overflow-y-auto bg-white border-[2px] border-black flex-1">
-                    {subtasks.map((st, idx) => (<li key={idx} className="flex justify-between items-center text-xl bg-[#dfdfdf] px-2 py-1 border border-black"><span className="truncate mr-2">- {st}</span><button onClick={() => handleRemoveSubtask(idx)} type="button" className="text-black font-bold hover:bg-black hover:text-white px-1">X</button></li>))}
+                  <ul className="mt-2 flex flex-col gap-1 p-1 overflow-y-auto bg-white border-[2px] border-black flex-1 min-h-0">
+                    {subtasks.map((st, idx) => (<li key={idx} className="flex justify-between items-center text-xl bg-[#dfdfdf] px-2 py-1 border border-black shrink-0"><span className="truncate mr-2">- {st}</span><button onClick={() => handleRemoveSubtask(idx)} type="button" className="text-black font-bold hover:bg-black hover:text-white px-1">X</button></li>))}
                   </ul>
                 )}
               </div>
@@ -211,22 +223,23 @@ export default function Home() {
           </Window>
         )}
 
-        {!windows.notes.isMinimized && (
-          <Window title="Brain Dump" defaultX={500} defaultY={80} defaultWidth={400} onMinimize={() => toggleMinimize("notes")}>
-            <div className="flex flex-col gap-2 h-full">
+        {isMounted && !windows.notes.isMinimized && (
+          <Window title="Brain Dump" defaultX={Math.min(window.innerWidth - 450, centerPos.x + 350)} defaultY={Math.max(20, centerPos.y - 100)} defaultWidth={400} onMinimize={() => toggleMinimize("notes")}>
+            <div className="flex flex-col gap-2 h-full min-h-0">
               <p className="font-bold border-b-[2px] border-black pb-1 text-2xl shrink-0">Scratchpad</p>
-              <textarea value={noteText} onChange={(e) => setNoteText(e.target.value)} className="w-full flex-1 min-h-[150px] p-2 text-xl bg-white border-[2px] border-black outline-none resize-none focus:bg-[#f0f0f0] transition-colors text-black" placeholder="Notes..." />
+              <textarea value={noteText} onChange={(e) => setNoteText(e.target.value)} className="w-full flex-1 min-h-[150px] overflow-y-auto p-2 text-xl bg-white border-[2px] border-black outline-none resize-none focus:bg-[#f0f0f0] transition-colors text-black" placeholder="Notes..." />
               <div className="mt-1 flex justify-end shrink-0"><button onClick={handleSaveNote} disabled={isSavingNote} className="bg-[#5b7c99] hover:bg-black text-[#f9f6e6] px-6 py-1 text-xl font-bold border-[2px] border-black shadow-[2px_2px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-[2px] active:translate-y-[2px] transition-all disabled:opacity-30">Save</button></div>
             </div>
           </Window>
         )}
 
-        {!windows.quests.isMinimized && (
-          <Window title="Active Quests" defaultX={150} defaultY={300} defaultWidth={450} onMinimize={() => toggleMinimize("quests")}>
-            <div className="flex flex-col gap-2 h-full">
+        {/* THE FIX: Active Quests drops precisely in the dead center of the screen! */}
+        {isMounted && !windows.quests.isMinimized && (
+          <Window title="Active Quests" defaultX={centerPos.x} defaultY={centerPos.y} defaultWidth={450} defaultHeight={500} onMinimize={() => toggleMinimize("quests")}>
+            <div className="flex flex-col gap-2 h-full min-h-0 overflow-hidden">
               <p className="font-bold border-b-[2px] border-black pb-1 text-2xl shrink-0">Core Objectives</p>
               {tasks && tasks.length > 0 ? (
-                <ul className="mt-2 flex flex-col gap-4 overflow-y-auto pr-2 custom-scrollbar flex-1">
+                <ul className="mt-2 flex flex-col gap-4 overflow-y-auto pr-2 custom-scrollbar flex-1 min-h-0">
                   {tasks.map((task: Task) => (
                     <li key={task.id} className="flex flex-col gap-2 bg-white p-2 border-[2px] border-black shadow-[2px_2px_0px_rgba(0,0,0,1)] shrink-0">
                       <div className="flex items-start gap-3 group">
@@ -244,22 +257,22 @@ export default function Home() {
                     </li>
                   ))}
                 </ul>
-              ) : (<p className="text-xl py-4 opacity-50 text-center font-bold">Clear.</p>)}
+              ) : (<p className="text-xl py-4 opacity-50 text-center font-bold shrink-0">Clear.</p>)}
             </div>
           </Window>
         )}
 
-        {!windows.calendar.isMinimized && (
-          <Window title="Schedule Sync" defaultX={600} defaultY={350} defaultWidth={450} onMinimize={() => toggleMinimize("calendar")}>
-            <div className="h-full overflow-auto">
+        {isMounted && !windows.calendar.isMinimized && (
+          <Window title="Schedule Sync" defaultX={Math.min(window.innerWidth - 500, centerPos.x + 100)} defaultY={centerPos.y + 50} defaultWidth={450} onMinimize={() => toggleMinimize("calendar")}>
+            <div className="h-full overflow-auto flex-1 min-h-0">
               <Calendar tasks={tasks || []} />
             </div>
           </Window>
         )}
 
-        {!windows.finances.isMinimized && (
-          <Window title="Financial Vault" defaultX={700} defaultY={150} defaultWidth={400} onMinimize={() => toggleMinimize("finances")}>
-            <div className="flex flex-col gap-3 h-full">
+        {isMounted && !windows.finances.isMinimized && (
+          <Window title="Financial Vault" defaultX={Math.max(20, centerPos.x - 200)} defaultY={Math.max(20, centerPos.y - 150)} defaultWidth={400} onMinimize={() => toggleMinimize("finances")}>
+            <div className="flex flex-col gap-3 h-full min-h-0">
               <div className="bg-white p-3 text-center border-[2px] border-black shadow-[inset_2px_2px_0px_rgba(0,0,0,0.2)] shrink-0"><p className="text-lg tracking-widest uppercase font-bold text-black">Balance</p><p className="text-4xl font-bold tracking-widest text-black mt-1">{financeData ? `$${financeData.balance.toFixed(2)}` : "..."}</p></div>
               <form onSubmit={handleAddFinance} className="flex gap-2 items-end border-b-[2px] border-black pb-3 mt-2 shrink-0">
                 <div className="flex flex-col gap-1 flex-1"><label className="text-lg font-bold text-black">Entry:</label><input type="text" value={financeTitle} onChange={(e) => setFinanceTitle(e.target.value)} className="w-full p-1 text-xl bg-white border-[2px] border-black outline-none focus:bg-[#f0f0f0] text-black" disabled={isSubmittingFinance}/></div>
@@ -305,7 +318,6 @@ export default function Home() {
                     onClick={() => launchApp(key as keyof typeof windows)}
                     className="flex items-center gap-3 px-4 py-2 hover:bg-black hover:text-white transition-colors text-black font-bold text-xl text-left group"
                   >
-                    {/* Re-using the icon, but wrapped in a slightly smaller scaler to fit the menu! */}
                     <div className="scale-75 origin-left">{win.icon}</div>
                     {win.title}
                   </button>

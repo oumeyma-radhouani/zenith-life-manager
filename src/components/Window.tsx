@@ -6,11 +6,12 @@ interface WindowProps {
   defaultX?: number;
   defaultY?: number;
   defaultWidth?: number;
+  defaultHeight?: number | string;
   children: React.ReactNode;
   onMinimize?: () => void;
 }
 
-export default function Window({ title, defaultX = 50, defaultY = 50, defaultWidth = 400, children, onMinimize }: WindowProps) {
+export default function Window({ title, defaultX = 50, defaultY = 50, defaultWidth = 400, defaultHeight = "auto", children, onMinimize }: WindowProps) {
   const [isMaximized, setIsMaximized] = useState(false);
 
   const toggleMaximize = (e: React.MouseEvent) => {
@@ -31,15 +32,15 @@ export default function Window({ title, defaultX = 50, defaultY = 50, defaultWid
               <div className="w-2.5 h-[2px] bg-black group-hover:bg-white"></div>
             </button>
           )}
-          <button type="button" onClick={toggleMaximize} onMouseDown={(e) => e.stopPropagation()} className="w-5 h-5 bg-[#dfdfdf] border-[2px] border-black text-black text-sm font-bold flex items-center justify-center hover:bg-black hover:text-white transition-colors"> 
+          <button type="button" onClick={toggleMaximize} onMouseDown={(e) => e.stopPropagation()} className="w-5 h-5 bg-[#dfdfdf] border-[2px] border-black text-black text-sm font-bold flex items-center justify-center hover:bg-black hover:text-white transition-colors" title={isMaximized ? "Restore" : "Maximize"}> 
             {isMaximized ? '❐' : '□'} 
           </button>
         </div>
       </div>
       
-      {/* THE RESPONSIVE FIX: Removed hard min-widths here. The content will now perfectly adapt to the Rnd wrapper's size. */}
-      <div className="p-4 cursor-default text-black bg-[#dfdfdf] flex-1 overflow-auto flex flex-col">
-        <div className={`w-full h-full flex flex-col ${isMaximized ? "max-w-2xl mx-auto" : ""}`}>
+      {/* THE RESIZING FIX: Added strict overflow-hidden and min-h-0 flex rules to lock content inside */}
+      <div className="p-4 cursor-default text-black bg-[#dfdfdf] flex-1 min-h-0 flex flex-col overflow-hidden">
+        <div className={`w-full h-full flex flex-col min-h-0 ${isMaximized ? "max-w-2xl mx-auto" : ""}`}>
           {children}
         </div>
       </div>
@@ -58,15 +59,10 @@ export default function Window({ title, defaultX = 50, defaultY = 50, defaultWid
 
   return (
     <Rnd
-      default={{
-        x: defaultX,
-        y: defaultY,
-        width: defaultWidth,
-        height: 'auto',
-      }}
+      default={{ x: defaultX, y: defaultY, width: defaultWidth, height: defaultHeight }}
       minWidth={320}
       minHeight={250}
-      bounds="parent" // This locks the window to the desktop area so it doesn't get lost behind the taskbar
+      bounds="parent" 
       dragHandleClassName="window-handle"
       className="bg-[#dfdfdf] border-[2px] border-black shadow-[3px_3px_0px_rgba(0,0,0,1)] flex flex-col z-20 hover:!z-[80] overflow-hidden"
     >
