@@ -13,6 +13,17 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
+// --- ZENITH OS FULL-COLOR PIXEL ICON COMPONENT ---
+// Increased size to w-12 h-12 and added a crisp drop shadow and hover bounce
+const ColorPixelIcon = ({ src }: { src: string }) => (
+  <img 
+    src={src} 
+    alt="icon" 
+    className="w-12 h-12 object-contain drop-shadow-[2px_2px_0px_rgba(0,0,0,0.8)] group-hover:-translate-y-1 transition-transform duration-200 shrink-0" 
+    style={{ imageRendering: 'pixelated' }}
+  />
+);
+
 export default function Home() {
   const [session, setSession] = useState<any>(null);
   const [email, setEmail] = useState("");
@@ -20,7 +31,6 @@ export default function Home() {
   const [authError, setAuthError] = useState("");
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   
-  // --- STATE ENGINES ---
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [isStartMenuOpen, setIsStartMenuOpen] = useState(false);
 
@@ -30,18 +40,17 @@ export default function Home() {
   const { data: financeData, mutate: mutateFinances } = useSWR("http://localhost:8000/finances/", fetcher);
   
   const [windows, setWindows] = useState({
-    terminal: { title: "Quest Terminal", isMinimized: false, icon: "🎮" },
-    quests: { title: "Active Quests", isMinimized: false, icon: "📋" },
-    notes: { title: "Brain Dump", isMinimized: true, icon: "💭" },
-    calendar: { title: "Schedule Sync", isMinimized: true, icon: "📅" },
-    finances: { title: "Financial Vault", isMinimized: true, icon: "💎" }
+    terminal: { title: "Quest Terminal", isMinimized: false, icon: <ColorPixelIcon src="/Home.png" /> },
+    quests: { title: "Active Quests", isMinimized: false, icon: <ColorPixelIcon src="/ChestTreasure.png" /> },
+    notes: { title: "Brain Dump", isMinimized: true, icon: <ColorPixelIcon src="/Pencil.png" /> },
+    calendar: { title: "Schedule Sync", isMinimized: true, icon: <ColorPixelIcon src="/Cloud.png" /> },
+    finances: { title: "Financial Vault", isMinimized: true, icon: <ColorPixelIcon src="/Coin2.png" /> }
   });
 
   const toggleMinimize = (key: keyof typeof windows) => {
     setWindows(prev => ({ ...prev, [key]: { ...prev[key], isMinimized: !prev[key].isMinimized } }));
   };
 
-  // Helper to open apps directly from the Start Menu
   const launchApp = (key: keyof typeof windows) => {
     setWindows(prev => ({ ...prev, [key]: { ...prev[key], isMinimized: false } }));
     setIsStartMenuOpen(false); 
@@ -108,25 +117,15 @@ export default function Home() {
   if (!session) {
     return (
       <main className="relative w-screen h-screen overflow-hidden text-black text-xl flex flex-col items-center justify-center p-4 bg-[#6c42ab]">
-        
-        {/* --- STARRY LOGIN PARALLAX BACKGROUND --- */}
         <div className="fixed inset-0 z-0 pointer-events-none">
-          {/* Base Layer - Scaled 5% from the bottom to hide the dirty image artifact! */}
           <div className="absolute inset-0 parallax-layer scale-[1.05] origin-bottom" style={{ backgroundImage: "url('/1_starry.png')" }}></div>
-          
-          {/* Stars (Slowest) */}
           <div className="absolute inset-0 parallax-layer" style={{ backgroundImage: "url('/6_starry.png')", animation: "pan-left 300s linear infinite" }}></div>
-          {/* Back Mountains/Clouds */}
           <div className="absolute inset-0 parallax-layer" style={{ backgroundImage: "url('/2_starry.png')", animation: "pan-left 200s linear infinite" }}></div>
-          {/* Mid Clouds */}
           <div className="absolute inset-0 parallax-layer" style={{ backgroundImage: "url('/3_starry.png')", animation: "pan-left 150s linear infinite" }}></div>
-          {/* Foreground Clouds */}
           <div className="absolute inset-0 parallax-layer" style={{ backgroundImage: "url('/4_starry.png')", animation: "pan-left 100s linear infinite" }}></div>
-          {/* Foreground Silhouette (Fastest) */}
           <div className="absolute inset-0 parallax-layer" style={{ backgroundImage: "url('/5_starry.png')", animation: "pan-left 60s linear infinite" }}></div>
         </div>
 
-        {/* LOGIN BOX */}
         <div className="w-[400px] border-[2px] border-black p-8 bg-white relative z-10 overflow-hidden shadow-[8px_8px_0px_rgba(0,0,0,1)]">
           <h1 className="text-5xl font-bold mb-2 tracking-widest text-center text-black">ZENITH OS</h1>
           <p className="text-lg mb-8 text-center border-b-[2px] border-black pb-2 tracking-widest uppercase">System Initialization</p>
@@ -146,8 +145,6 @@ export default function Home() {
       
       {/* --- DAY/NIGHT PARALLAX ENGINE --- */}
       <div className={`fixed inset-0 z-0 pointer-events-none transition-colors duration-1000 ease-in-out ${isDarkMode ? 'bg-[#0f172a]' : 'bg-[#1ca3ec]'}`}>
-        
-        {/* LIGHT MODE LAYERS */}
         <div className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${isDarkMode ? 'opacity-0' : 'opacity-100'}`}>
           <div className="absolute inset-0 parallax-layer" style={{ backgroundImage: "url('/1.png')" }}></div>
           <div className="absolute inset-0 parallax-layer opacity-90" style={{ backgroundImage: "url('/2.png')", animation: "pan-left 180s linear infinite" }}></div>
@@ -155,30 +152,33 @@ export default function Home() {
           <div className="absolute inset-0 parallax-layer" style={{ backgroundImage: "url('/4.png')", animation: "pan-left 60s linear infinite" }}></div>
         </div>
 
-        {/* DARK MODE LAYERS */}
         <div className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${isDarkMode ? 'opacity-100' : 'opacity-0'}`}>
           <div className="absolute inset-0 parallax-layer" style={{ backgroundImage: "url('/1_dark.png')" }}></div>
           <div className="absolute inset-0 parallax-layer" style={{ backgroundImage: "url('/2_dark.png')", animation: "pan-left 300s linear infinite" }}></div>
           <div className="absolute inset-0 parallax-layer" style={{ backgroundImage: "url('/3_dark.png')", animation: "pan-left 120s linear infinite" }}></div>
           <div className="absolute inset-0 parallax-layer" style={{ backgroundImage: "url('/4_dark.png')", animation: "pan-left 60s linear infinite" }}></div>
         </div>
-
       </div>
 
-      {/* SIDEBAR DESKTOP ICONS */}
-      <div className="absolute top-10 left-6 z-30 flex flex-col gap-6 items-center">
+      {/* --- PURE DESKTOP ICONS --- */}
+      <div className="absolute top-10 left-6 z-30 flex flex-col gap-8 items-center w-[100px]">
         {(Object.keys(windows) as Array<keyof typeof windows>).map((key) => {
           const win = windows[key];
           return (
             <button 
               key={key} 
               onClick={() => toggleMinimize(key)}
-              className={`flex flex-col items-center gap-1 group transition-all ${!win.isMinimized ? 'opacity-50' : 'opacity-100 hover:scale-110'}`}
+              // Removed the background colors and borders. Added a subtle opacity fade when a window is closed.
+              className={`flex flex-col items-center gap-2 group transition-all ${!win.isMinimized ? 'opacity-40' : 'opacity-100'}`}
             >
-              <div className={`w-14 h-14 bg-[#dfdfdf] border-[2px] border-black shadow-[3px_3px_0px_rgba(0,0,0,1)] flex items-center justify-center text-3xl group-hover:bg-[#5b7c99] group-active:shadow-none group-active:translate-x-[3px] group-active:translate-y-[3px]`}>
-                {win.icon}
-              </div>
-              <span className="text-[14px] font-bold text-black bg-white px-1 border-[2px] border-black">{win.title}</span>
+              {win.icon}
+              {/* The Text Stroke Trick: Pure white text with a hard black outline around it */}
+              <span 
+                className="text-[14px] font-bold text-white tracking-wide text-center leading-tight drop-shadow-[0px_4px_4px_rgba(0,0,0,0.5)]"
+                style={{ textShadow: '1px 1px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 0px 2px 0 #000' }}
+              >
+                {win.title}
+              </span>
             </button>
           )
         })}
@@ -277,7 +277,7 @@ export default function Home() {
         )}
       </div>
 
-      {/* --- START MENU OVERLAY (Closes menu if you click the desktop) --- */}
+      {/* --- START MENU OVERLAY --- */}
       {isStartMenuOpen && (
         <div 
           className="fixed inset-0 z-[95]" 
@@ -289,14 +289,12 @@ export default function Home() {
       {isStartMenuOpen && (
         <div className="fixed bottom-[48px] left-0 z-[101] bg-[#dfdfdf] border-[2px] border-black shadow-[4px_4px_0px_rgba(0,0,0,1)] flex min-h-[350px]">
           
-          {/* Left Vertical Branding Stripe */}
           <div className="w-10 bg-[#5b7c99] flex flex-col justify-end items-center pb-2 border-r-[2px] border-black">
             <span className="text-white font-bold tracking-widest text-2xl drop-shadow-[1px_1px_0px_rgba(0,0,0,0.8)] whitespace-nowrap -rotate-90 mb-12">
               ZENITH OS
             </span>
           </div>
 
-          {/* Right App List */}
           <div className="flex flex-col flex-1 py-1 min-w-[220px] justify-between">
             <div className="flex flex-col">
               {(Object.keys(windows) as Array<keyof typeof windows>).map((key) => {
@@ -305,9 +303,10 @@ export default function Home() {
                   <button 
                     key={key} 
                     onClick={() => launchApp(key as keyof typeof windows)}
-                    className="flex items-center gap-3 px-4 py-2 hover:bg-black hover:text-white transition-colors text-black font-bold text-xl text-left"
+                    className="flex items-center gap-3 px-4 py-2 hover:bg-black hover:text-white transition-colors text-black font-bold text-xl text-left group"
                   >
-                    <span className="text-2xl drop-shadow-[1px_1px_0px_rgba(0,0,0,0.3)]">{win.icon}</span>
+                    {/* Re-using the icon, but wrapped in a slightly smaller scaler to fit the menu! */}
+                    <div className="scale-75 origin-left">{win.icon}</div>
                     {win.title}
                   </button>
                 )
@@ -317,9 +316,11 @@ export default function Home() {
             <div className="flex flex-col border-t-[2px] border-black pt-1 mt-2">
               <button 
                 onClick={handleLogout}
-                className="flex items-center gap-3 px-4 py-2 hover:bg-black hover:text-white transition-colors text-black font-bold text-xl text-left"
+                className="flex items-center gap-3 px-4 py-2 hover:bg-[#5b7c99] hover:text-white transition-colors text-black font-bold text-xl text-left group"
               >
-                <span className="text-2xl drop-shadow-[1px_1px_0px_rgba(0,0,0,0.3)]">🔌</span>
+                <div className="scale-75 origin-left">
+                  <ColorPixelIcon src="/Power.png" />
+                </div>
                 Shut Down...
               </button>
             </div>
@@ -330,10 +331,7 @@ export default function Home() {
       {/* --- TASKBAR UPGRADE: System Tray & Start Toggle --- */}
       <div className="fixed bottom-0 left-0 w-full h-12 bg-[#dfdfdf] border-t-[2px] border-black flex items-center px-2 z-[100] justify-between shadow-[0px_-2px_10px_rgba(0,0,0,0.2)]">
         
-        {/* LEFT SIDE: Start Button & Tabs */}
         <div className="flex items-center gap-2 overflow-x-auto flex-1 pr-2">
-          
-          {/* THE START BUTTON */}
           <button 
             onClick={() => setIsStartMenuOpen(!isStartMenuOpen)}
             className={`shrink-0 flex items-center gap-2 font-bold text-2xl px-3 py-1 border-[2px] border-black transition-all
@@ -350,7 +348,6 @@ export default function Home() {
 
           {(Object.keys(windows) as Array<keyof typeof windows>).map((key) => {
             const win = windows[key];
-            // Only show tabs on the taskbar if the window is currently OPEN
             if (win.isMinimized) return null;
 
             return (
@@ -365,19 +362,23 @@ export default function Home() {
           })}
         </div>
 
-        {/* RIGHT SIDE: System Tray (Dark Mode + Player Level) */}
         <div className="flex items-center gap-2 shrink-0">
           
           <button 
             onClick={() => setIsDarkMode(!isDarkMode)}
-            className="w-9 h-9 bg-white border-[2px] border-black flex items-center justify-center hover:bg-[#dfdfdf] transition-colors shadow-[inset_2px_2px_0px_rgba(0,0,0,0.2)] text-xl"
+            className="w-10 h-10 bg-white border-[2px] border-black flex items-center justify-center hover:bg-[#dfdfdf] transition-colors shadow-[inset_2px_2px_0px_rgba(0,0,0,0.2)] group"
             title="Toggle Day/Night"
           >
-            {isDarkMode ? '🌙' : '☀️'}
+            <img 
+              src={isDarkMode ? '/Sleep.png' : '/Sun.png'} 
+              alt="theme toggle" 
+              className="w-6 h-6 group-hover:scale-125 transition-transform duration-200" 
+              style={{ imageRendering: 'pixelated' }} 
+            />
           </button>
 
           {player && (
-            <div className="flex items-center gap-2 bg-white border-[2px] border-black px-3 py-1 h-9 shadow-[inset_2px_2px_0px_rgba(0,0,0,0.2)] cursor-default">
+            <div className="flex items-center gap-2 bg-white border-[2px] border-black px-3 py-1 h-10 shadow-[inset_2px_2px_0px_rgba(0,0,0,0.2)] cursor-default">
               <span className="text-[16px] font-bold tracking-widest text-[#5b7c99]">LVL {player.level}</span>
               <div className="w-24 h-3 bg-[#dfdfdf] border-[1px] border-black p-[1px]"><div className="h-full bg-[#5b7c99] transition-all duration-500 ease-out" style={{ width: `${player.xp % 100}%` }}></div></div>
               <span className="text-[14px] font-bold text-black">{player.xp} XP</span>
