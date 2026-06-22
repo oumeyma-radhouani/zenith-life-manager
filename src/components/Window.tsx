@@ -21,7 +21,7 @@ export default function Window({ title, defaultX = 50, defaultY = 50, defaultWid
 
   const WindowContent = (
     <>
-      <div className="window-handle bg-[#5b7c99] border-b-[2px] border-black px-1 py-1 flex justify-between items-center cursor-grab active:cursor-grabbing select-none h-8 shrink-0">
+      <div className="window-handle bg-[#5b7c99] border-b-[2px] border-black px-1 py-1 flex justify-between items-center cursor-grab active:cursor-grabbing select-none h-8 shrink-0 relative z-10">
         <button type="button" onMouseDown={(e) => e.stopPropagation()} className="w-5 h-5 border-[2px] border-black bg-[#dfdfdf] flex items-center justify-center hover:bg-black group"> 
           <div className="w-1.5 h-1.5 bg-black group-hover:bg-white"></div>
         </button>
@@ -38,9 +38,9 @@ export default function Window({ title, defaultX = 50, defaultY = 50, defaultWid
         </div>
       </div>
       
-      {/* THE RESIZING FIX: Added strict overflow-hidden and min-h-0 flex rules to lock content inside */}
-      <div className="p-4 cursor-default text-black bg-[#dfdfdf] flex-1 min-h-0 flex flex-col overflow-hidden">
-        <div className={`w-full h-full flex flex-col min-h-0 ${isMaximized ? "max-w-2xl mx-auto" : ""}`}>
+      {/* THE FIX: Pure flex columns passing min-h-0 directly down to the children. No absolute positioning. */}
+      <div className="flex-1 min-h-0 flex flex-col p-4 bg-[#dfdfdf] overflow-hidden text-black cursor-default">
+        <div className={`flex flex-col h-full flex-1 min-h-0 w-full ${isMaximized ? "max-w-2xl mx-auto" : ""}`}>
           {children}
         </div>
       </div>

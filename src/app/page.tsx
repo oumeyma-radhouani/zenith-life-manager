@@ -24,6 +24,8 @@ const ColorPixelIcon = ({ src }: { src: string }) => (
 
 export default function Home() {
   const [session, setSession] = useState<any>(null);
+  const [systemState, setSystemState] = useState<'login' | 'booting' | 'desktop'>('login');
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [authError, setAuthError] = useState("");
@@ -32,7 +34,6 @@ export default function Home() {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [isStartMenuOpen, setIsStartMenuOpen] = useState(false);
 
-  // --- NEW: Boot/Mounting State to calculate perfect center coordinates ---
   const [isMounted, setIsMounted] = useState(false);
   const [centerPos, setCenterPos] = useState({ x: 100, y: 100 });
 
@@ -41,7 +42,6 @@ export default function Home() {
   const { data: note, mutate: mutateNote } = useSWR("http://localhost:8000/notes/", fetcher); 
   const { data: financeData, mutate: mutateFinances } = useSWR("http://localhost:8000/finances/", fetcher);
   
-  // THE FIX: Set terminal to true so ONLY Quests boots up open!
   const [windows, setWindows] = useState({
     terminal: { title: "Quest Terminal", isMinimized: true, icon: <ColorPixelIcon src="/Home.png" /> },
     quests: { title: "Active Quests", isMinimized: false, icon: <ColorPixelIcon src="/ChestTreasure.png" /> },
@@ -75,17 +75,35 @@ export default function Home() {
   const [isSubmittingFinance, setIsSubmittingFinance] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => setSession(session));
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => setSession(session));
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      if (session) setSystemState('booting');
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      if (session) {
+        setSystemState(prev => prev === 'login' ? 'booting' : prev);
+      } else {
+        setSystemState('login');
+      }
+    });
     return () => subscription.unsubscribe();
   }, []);
 
+  // THE NEW CRT TIMER: Clears the overlay after 1.1s
+  useEffect(() => {
+    if (systemState === 'booting') {
+      const timer = setTimeout(() => {
+        setSystemState('desktop');
+      }, 1100); 
+      return () => clearTimeout(timer);
+    }
+  }, [systemState]);
+
   useEffect(() => { if (note && noteText === "") setNoteText(note.content || ""); }, [note, noteText]);
 
-  // THE FIX: Calculate true center of screen once on mount
   useEffect(() => {
     setIsMounted(true);
-    // 450 is the width of the Active Quests window, 500 is its approx height
     setCenterPos({
       x: Math.max(50, (window.innerWidth - 450) / 2),
       y: Math.max(50, (window.innerHeight - 500) / 2)
@@ -127,7 +145,7 @@ export default function Home() {
   };
   const handleDeleteFinance = async (id: number) => { await fetch(`http://localhost:8000/finances/${id}`, { method: "DELETE" }); mutateFinances(); };
 
-  if (!session) {
+  if (systemState === 'login') {
     return (
       <main className="relative w-screen h-screen overflow-hidden text-black text-xl flex flex-col items-center justify-center p-4 bg-[#6c42ab]">
         <div className="fixed inset-0 z-0 pointer-events-none">
@@ -143,19 +161,47 @@ export default function Home() {
           <h1 className="text-5xl font-bold mb-2 tracking-widest text-center text-black">ZENITH OS</h1>
           <p className="text-lg mb-8 text-center border-b-[2px] border-black pb-2 tracking-widest uppercase">System Initialization</p>
           <form onSubmit={handleLogin} className="flex flex-col gap-5 relative z-10">
-            <div className="flex flex-col gap-1"><label className="text-lg font-bold text-black">USER EMAIL:</label><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="bg-[#dfdfdf] border-[2px] border-black text-black p-2 outline-none focus:bg-white" required/></div>
-            <div className="flex flex-col gap-1"><label className="text-lg font-bold text-black">PASSPHRASE:</label><input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="bg-[#dfdfdf] border-[2px] border-black text-black p-2 outline-none focus:bg-white" required/></div>
+            <div className="flex flex-col gap-1"><label className="text-lg font-bold text-black">USER EMAIL:</label><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="bg-[#dfdfdf] border-[2px] border-black text-black p-2 outline-none focus:bg-white" required disabled={isLoggingIn}/></div>
+            <div className="flex flex-col gap-1"><label className="text-lg font-bold text-black">PASSPHRASE:</label><input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="bg-[#dfdfdf] border-[2px] border-black text-black p-2 outline-none focus:bg-white" required disabled={isLoggingIn}/></div>
             {authError && <p className="text-red-600 text-lg font-bold">ERROR: {authError}</p>}
-            <button type="submit" className="mt-4 border-[2px] border-black bg-[#dfdfdf] text-black p-3 hover:bg-black hover:text-white transition-colors font-bold tracking-widest">BOOT SYSTEM</button>
+            <button type="submit" disabled={isLoggingIn} className="mt-4 border-[2px] border-black bg-[#dfdfdf] text-black p-3 hover:bg-black hover:text-white transition-colors font-bold tracking-widest disabled:opacity-50">BOOT SYSTEM</button>
           </form>
         </div>
       </main>
     );
   }
 
+  // Renders both 'booting' and 'desktop', but overlays the CRT animation if booting!
   return (
     <main className="relative w-screen h-screen overflow-hidden text-black bg-black">
       
+      {/* --- THE CRT BOOT OVERLAY --- */}
+      {systemState === 'booting' && (
+        <div className="fixed inset-0 z-[9999] bg-black flex items-center justify-center crt-overlay pointer-events-auto cursor-wait">
+          <style dangerouslySetInnerHTML={{__html: `
+            .crt-overlay {
+              animation: crt-bg-clear 1.1s forwards;
+            }
+            .crt-beam {
+              /* steps(10, end) is the magic that makes the expansion pixelated/chunky! */
+              animation: crt-beam-anim 1s steps(10, end) forwards;
+            }
+            @keyframes crt-bg-clear {
+              0%, 80% { background: #000; opacity: 1; }
+              100% { background: transparent; opacity: 0; visibility: hidden; }
+            }
+            @keyframes crt-beam-anim {
+              0% { width: 100%; height: 100vh; background: #fff; opacity: 1; box-shadow: 0 0 40px #1ca3ec; }
+              10% { width: 100%; height: 4px; background: #fff; opacity: 1; box-shadow: 0 0 20px #fff, 0 0 40px #1ca3ec; }
+              40% { width: 100%; height: 4px; background: #fff; opacity: 1; box-shadow: 0 0 20px #fff, 0 0 40px #1ca3ec; }
+              80% { width: 100%; height: 100vh; background: #fff; opacity: 1; filter: brightness(1.5); }
+              100% { width: 100%; height: 100vh; background: transparent; opacity: 0; }
+            }
+          `}} />
+          <div className="crt-beam bg-white"></div>
+        </div>
+      )}
+
       {/* --- DAY/NIGHT PARALLAX ENGINE --- */}
       <div className={`fixed inset-0 z-0 pointer-events-none transition-colors duration-1000 ease-in-out ${isDarkMode ? 'bg-[#0f172a]' : 'bg-[#1ca3ec]'}`}>
         <div className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${isDarkMode ? 'opacity-0' : 'opacity-100'}`}>
@@ -173,7 +219,6 @@ export default function Home() {
         </div>
       </div>
 
-      {/* --- PURE DESKTOP ICONS --- */}
       <div className="absolute top-10 left-6 z-30 flex flex-col gap-8 items-center w-[100px]">
         {(Object.keys(windows) as Array<keyof typeof windows>).map((key) => {
           const win = windows[key];
@@ -195,48 +240,47 @@ export default function Home() {
         })}
       </div>
 
-      {/* THE DESKTOP WORKSPACE */}
       <div className="relative z-10 w-full h-[calc(100vh-48px)] overflow-hidden">
         
-        {/* We only render the windows after the client has measured the screen (isMounted) */}
         {isMounted && !windows.terminal.isMinimized && (
-          <Window title="Quest Terminal" defaultX={Math.max(20, centerPos.x - 400)} defaultY={Math.max(20, centerPos.y - 50)} defaultWidth={350} onMinimize={() => toggleMinimize("terminal")}>
-            <form onSubmit={handleCreateQuest} className="flex flex-col gap-3 h-full min-h-0">
-              <p className="font-bold border-b-[2px] border-black pb-1 text-2xl shrink-0">New Objective</p>
-              <div className="flex flex-col gap-1 shrink-0"><label className="text-lg font-bold">Title:</label><input type="text" value={title} onChange={(e) => setTitle(e.target.value)} className="w-full p-1 text-xl border-[2px] border-black bg-white outline-none focus:bg-[#f0f0f0]" /></div>
-              <div className="flex flex-col gap-1 shrink-0"><label className="text-lg font-bold">Difficulty:</label><select value={difficulty} onChange={(e) => setDifficulty(e.target.value)} className="w-full p-1 text-xl border-[2px] border-black bg-white outline-none cursor-pointer focus:bg-[#f0f0f0]"><option value="minion">🟢 Minion</option><option value="elite">🟡 Elite</option><option value="boss">🔴 Boss Battle</option></select></div>
-              <div className="flex flex-col gap-1 shrink-0"><label className="text-lg font-bold">Deadline:</label><input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="w-full p-1 text-xl border-[2px] border-black bg-white outline-none disabled:bg-[#dfdfdf] focus:bg-[#f0f0f0]" disabled={isDaily} /></div>
-              
-              <div className="flex flex-col gap-1 mt-1 border-t-[2px] border-dashed border-black pt-2 flex-1 min-h-0 overflow-hidden">
-                <label className="text-lg font-bold shrink-0">Sub-Objectives:</label>
-                <div className="flex gap-1 shrink-0"><input type="text" value={subtaskInput} onChange={(e) => setSubtaskInput(e.target.value)} className="flex-1 min-w-0 p-1 text-lg border-[2px] border-black bg-white outline-none focus:bg-[#f0f0f0]" disabled={isDaily}/>
-                <button onClick={handleAddSubtask} disabled={isDaily || !subtaskInput.trim()} className="bg-[#5b7c99] hover:bg-black text-[#f9f6e6] px-4 rounded-none text-xl font-bold border-[2px] border-black shadow-[2px_2px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-[2px] active:translate-y-[2px] transition-all disabled:opacity-30 shrink-0">+</button></div>
-                {subtasks.length > 0 && (
-                  <ul className="mt-2 flex flex-col gap-1 p-1 overflow-y-auto bg-white border-[2px] border-black flex-1 min-h-0">
-                    {subtasks.map((st, idx) => (<li key={idx} className="flex justify-between items-center text-xl bg-[#dfdfdf] px-2 py-1 border border-black shrink-0"><span className="truncate mr-2">- {st}</span><button onClick={() => handleRemoveSubtask(idx)} type="button" className="text-black font-bold hover:bg-black hover:text-white px-1">X</button></li>))}
-                  </ul>
-                )}
-              </div>
-              <div className="flex items-center gap-3 mt-2 shrink-0"><input type="checkbox" id="daily-check" checked={isDaily} onChange={(e) => { setIsDaily(e.target.checked); if (e.target.checked) { setDueDate(""); setSubtasks([]); setSubtaskInput(""); } }} className="cursor-pointer w-4 h-4 border-[2px] border-black accent-[#5b7c99] rounded-none" disabled={isSubmitting}/><label htmlFor="daily-check" className="text-lg font-bold cursor-pointer">Register as Daily</label></div>
-              <div className="mt-2 flex justify-end shrink-0"><button type="submit" disabled={!title.trim()} className="bg-[#5b7c99] hover:bg-black text-[#f9f6e6] px-6 py-2 text-xl font-bold border-[2px] border-black shadow-[2px_2px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-[2px] active:translate-y-[2px] transition-all disabled:opacity-30">Add Quest</button></div>
-            </form>
+          <Window title="Quest Terminal" defaultX={Math.max(20, centerPos.x - 400)} defaultY={Math.max(20, centerPos.y - 50)} defaultWidth={350} defaultHeight={550} onMinimize={() => toggleMinimize("terminal")}>
+            <div className="h-full w-full overflow-y-auto custom-scrollbar pr-2 min-h-0 flex flex-col">
+              <form onSubmit={handleCreateQuest} className="flex flex-col gap-3 min-h-max pb-2">
+                <p className="font-bold border-b-[2px] border-black pb-1 text-2xl shrink-0">New Objective</p>
+                <div className="flex flex-col gap-1 shrink-0"><label className="text-lg font-bold">Title:</label><input type="text" value={title} onChange={(e) => setTitle(e.target.value)} className="w-full p-1 text-xl border-[2px] border-black bg-white outline-none focus:bg-[#f0f0f0]" /></div>
+                <div className="flex flex-col gap-1 shrink-0"><label className="text-lg font-bold">Difficulty:</label><select value={difficulty} onChange={(e) => setDifficulty(e.target.value)} className="w-full p-1 text-xl border-[2px] border-black bg-white outline-none cursor-pointer focus:bg-[#f0f0f0]"><option value="minion">🟢 Minion</option><option value="elite">🟡 Elite</option><option value="boss">🔴 Boss Battle</option></select></div>
+                <div className="flex flex-col gap-1 shrink-0"><label className="text-lg font-bold">Deadline:</label><input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="w-full p-1 text-xl border-[2px] border-black bg-white outline-none disabled:bg-[#dfdfdf] focus:bg-[#f0f0f0]" disabled={isDaily} /></div>
+                
+                <div className="flex flex-col gap-1 mt-1 border-t-[2px] border-dashed border-black pt-2 shrink-0">
+                  <label className="text-lg font-bold shrink-0">Sub-Objectives:</label>
+                  <div className="flex gap-1 shrink-0"><input type="text" value={subtaskInput} onChange={(e) => setSubtaskInput(e.target.value)} className="flex-1 min-w-0 p-1 text-lg border-[2px] border-black bg-white outline-none focus:bg-[#f0f0f0]" disabled={isDaily}/>
+                  <button onClick={handleAddSubtask} disabled={isDaily || !subtaskInput.trim()} className="bg-[#5b7c99] hover:bg-black text-[#f9f6e6] px-4 rounded-none text-xl font-bold border-[2px] border-black shadow-[2px_2px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-[2px] active:translate-y-[2px] transition-all disabled:opacity-30 shrink-0">+</button></div>
+                  {subtasks.length > 0 && (
+                    <ul className="mt-2 flex flex-col gap-1 p-1 bg-white border-[2px] border-black shrink-0">
+                      {subtasks.map((st, idx) => (<li key={idx} className="flex justify-between items-center text-xl bg-[#dfdfdf] px-2 py-1 border border-black shrink-0"><span className="truncate mr-2">- {st}</span><button onClick={() => handleRemoveSubtask(idx)} type="button" className="text-black font-bold hover:bg-black hover:text-white px-1">X</button></li>))}
+                    </ul>
+                  )}
+                </div>
+                <div className="flex items-center gap-3 mt-2 shrink-0"><input type="checkbox" id="daily-check" checked={isDaily} onChange={(e) => { setIsDaily(e.target.checked); if (e.target.checked) { setDueDate(""); setSubtasks([]); setSubtaskInput(""); } }} className="cursor-pointer w-4 h-4 border-[2px] border-black accent-[#5b7c99] rounded-none" disabled={isSubmitting}/><label htmlFor="daily-check" className="text-lg font-bold cursor-pointer">Register as Daily</label></div>
+                <div className="mt-2 flex justify-end shrink-0"><button type="submit" disabled={!title.trim()} className="bg-[#5b7c99] hover:bg-black text-[#f9f6e6] px-6 py-2 text-xl font-bold border-[2px] border-black shadow-[2px_2px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-[2px] active:translate-y-[2px] transition-all disabled:opacity-30">Add Quest</button></div>
+              </form>
+            </div>
           </Window>
         )}
 
         {isMounted && !windows.notes.isMinimized && (
-          <Window title="Brain Dump" defaultX={Math.min(window.innerWidth - 450, centerPos.x + 350)} defaultY={Math.max(20, centerPos.y - 100)} defaultWidth={400} onMinimize={() => toggleMinimize("notes")}>
+          <Window title="Brain Dump" defaultX={Math.min(window.innerWidth - 450, centerPos.x + 350)} defaultY={Math.max(20, centerPos.y - 100)} defaultWidth={400} defaultHeight={400} onMinimize={() => toggleMinimize("notes")}>
             <div className="flex flex-col gap-2 h-full min-h-0">
               <p className="font-bold border-b-[2px] border-black pb-1 text-2xl shrink-0">Scratchpad</p>
-              <textarea value={noteText} onChange={(e) => setNoteText(e.target.value)} className="w-full flex-1 min-h-[150px] overflow-y-auto p-2 text-xl bg-white border-[2px] border-black outline-none resize-none focus:bg-[#f0f0f0] transition-colors text-black" placeholder="Notes..." />
+              <textarea value={noteText} onChange={(e) => setNoteText(e.target.value)} className="w-full flex-1 min-h-0 overflow-y-auto custom-scrollbar p-2 text-xl bg-white border-[2px] border-black outline-none resize-none focus:bg-[#f0f0f0] transition-colors text-black" placeholder="Notes..." />
               <div className="mt-1 flex justify-end shrink-0"><button onClick={handleSaveNote} disabled={isSavingNote} className="bg-[#5b7c99] hover:bg-black text-[#f9f6e6] px-6 py-1 text-xl font-bold border-[2px] border-black shadow-[2px_2px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-[2px] active:translate-y-[2px] transition-all disabled:opacity-30">Save</button></div>
             </div>
           </Window>
         )}
 
-        {/* THE FIX: Active Quests drops precisely in the dead center of the screen! */}
         {isMounted && !windows.quests.isMinimized && (
           <Window title="Active Quests" defaultX={centerPos.x} defaultY={centerPos.y} defaultWidth={450} defaultHeight={500} onMinimize={() => toggleMinimize("quests")}>
-            <div className="flex flex-col gap-2 h-full min-h-0 overflow-hidden">
+            <div className="flex flex-col gap-2 h-full min-h-0">
               <p className="font-bold border-b-[2px] border-black pb-1 text-2xl shrink-0">Core Objectives</p>
               {tasks && tasks.length > 0 ? (
                 <ul className="mt-2 flex flex-col gap-4 overflow-y-auto pr-2 custom-scrollbar flex-1 min-h-0">
@@ -263,15 +307,15 @@ export default function Home() {
         )}
 
         {isMounted && !windows.calendar.isMinimized && (
-          <Window title="Schedule Sync" defaultX={Math.min(window.innerWidth - 500, centerPos.x + 100)} defaultY={centerPos.y + 50} defaultWidth={450} onMinimize={() => toggleMinimize("calendar")}>
-            <div className="h-full overflow-auto flex-1 min-h-0">
+          <Window title="Schedule Sync" defaultX={Math.min(window.innerWidth - 500, centerPos.x + 100)} defaultY={centerPos.y + 50} defaultWidth={450} defaultHeight={450} onMinimize={() => toggleMinimize("calendar")}>
+            <div className="h-full w-full overflow-y-auto custom-scrollbar flex-1 min-h-0">
               <Calendar tasks={tasks || []} />
             </div>
           </Window>
         )}
 
         {isMounted && !windows.finances.isMinimized && (
-          <Window title="Financial Vault" defaultX={Math.max(20, centerPos.x - 200)} defaultY={Math.max(20, centerPos.y - 150)} defaultWidth={400} onMinimize={() => toggleMinimize("finances")}>
+          <Window title="Financial Vault" defaultX={Math.max(20, centerPos.x - 200)} defaultY={Math.max(20, centerPos.y - 150)} defaultWidth={400} defaultHeight={450} onMinimize={() => toggleMinimize("finances")}>
             <div className="flex flex-col gap-3 h-full min-h-0">
               <div className="bg-white p-3 text-center border-[2px] border-black shadow-[inset_2px_2px_0px_rgba(0,0,0,0.2)] shrink-0"><p className="text-lg tracking-widest uppercase font-bold text-black">Balance</p><p className="text-4xl font-bold tracking-widest text-black mt-1">{financeData ? `$${financeData.balance.toFixed(2)}` : "..."}</p></div>
               <form onSubmit={handleAddFinance} className="flex gap-2 items-end border-b-[2px] border-black pb-3 mt-2 shrink-0">
@@ -280,7 +324,7 @@ export default function Home() {
                 <div className="flex flex-col gap-1 w-[90px] shrink-0"><label className="text-lg font-bold text-black">Type:</label><select value={isIncome ? "income" : "expense"} onChange={(e) => setIsIncome(e.target.value === "income")} className="w-full p-1 text-xl bg-white border-[2px] border-black outline-none cursor-pointer focus:bg-[#f0f0f0] text-black" disabled={isSubmittingFinance}><option value="expense">Out</option><option value="income">In</option></select></div>
                 <button type="submit" disabled={isSubmittingFinance || !financeTitle.trim() || !financeAmount} className="bg-[#dfdfdf] hover:bg-black hover:text-white text-black px-4 py-1 text-lg font-bold border-[2px] border-black shadow-[2px_2px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-[2px] active:translate-y-[2px] transition-all disabled:opacity-30 shrink-0">ADD</button>
               </form>
-              <ul className="flex flex-col gap-1 overflow-y-auto pr-1 flex-1 min-h-0">
+              <ul className="flex flex-col gap-1 overflow-y-auto custom-scrollbar pr-1 flex-1 min-h-0">
                 {financeData && financeData.transactions.map((t: Transaction) => (
                   <li key={t.id} className="flex justify-between items-center text-xl bg-white p-1 border-[2px] border-black group transition-colors shrink-0"><span className="truncate w-[180px] font-bold text-black">{t.title}</span><div className="flex items-center gap-2 shrink-0"><span className={`font-bold ${t.is_income ? "text-black" : "text-black"}`}>{t.is_income ? "+" : "-"}${t.amount.toFixed(2)}</span><button onClick={() => handleDeleteFinance(t.id)} className="text-xl text-white bg-black opacity-0 group-hover:opacity-100 font-bold hover:bg-white hover:text-black px-2 border-[2px] border-black">X</button></div></li>
                 ))}
@@ -290,15 +334,10 @@ export default function Home() {
         )}
       </div>
 
-      {/* --- START MENU OVERLAY --- */}
       {isStartMenuOpen && (
-        <div 
-          className="fixed inset-0 z-[95]" 
-          onClick={() => setIsStartMenuOpen(false)}
-        ></div>
+        <div className="fixed inset-0 z-[95]" onClick={() => setIsStartMenuOpen(false)}></div>
       )}
 
-      {/* --- THE START MENU --- */}
       {isStartMenuOpen && (
         <div className="fixed bottom-[48px] left-0 z-[101] bg-[#dfdfdf] border-[2px] border-black shadow-[4px_4px_0px_rgba(0,0,0,1)] flex min-h-[350px]">
           
@@ -340,7 +379,6 @@ export default function Home() {
         </div>
       )}
 
-      {/* --- TASKBAR UPGRADE: System Tray & Start Toggle --- */}
       <div className="fixed bottom-0 left-0 w-full h-12 bg-[#dfdfdf] border-t-[2px] border-black flex items-center px-2 z-[100] justify-between shadow-[0px_-2px_10px_rgba(0,0,0,0.2)]">
         
         <div className="flex items-center gap-2 overflow-x-auto flex-1 pr-2">
@@ -398,7 +436,6 @@ export default function Home() {
           )}
         </div>
       </div>
-
     </main>
   );
 }
