@@ -5,7 +5,9 @@ import useSWR from "swr";
 import { useState, useEffect } from "react"; 
 import Window from "../components/Window";
 import Calendar from "../components/Calendar";
+import MusicPlayer from "../components/MusicPlayer";
 import { createClient } from "@supabase/supabase-js"; 
+import { Rnd } from "react-rnd"; // <-- Imported Rnd directly!
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -42,12 +44,14 @@ export default function Home() {
   const { data: note, mutate: mutateNote } = useSWR("http://localhost:8000/notes/", fetcher); 
   const { data: financeData, mutate: mutateFinances } = useSWR("http://localhost:8000/finances/", fetcher);
   
+  // Mounted the CD.png icon to trigger the widget
   const [windows, setWindows] = useState({
     terminal: { title: "Quest Terminal", isMinimized: true, icon: <ColorPixelIcon src="/Home.png" /> },
     quests: { title: "Active Quests", isMinimized: false, icon: <ColorPixelIcon src="/ChestTreasure.png" /> },
     notes: { title: "Brain Dump", isMinimized: true, icon: <ColorPixelIcon src="/Pencil.png" /> },
     calendar: { title: "Schedule Sync", isMinimized: true, icon: <ColorPixelIcon src="/Cloud.png" /> },
-    finances: { title: "Financial Vault", isMinimized: true, icon: <ColorPixelIcon src="/Coin2.png" /> }
+    finances: { title: "Financial Vault", isMinimized: true, icon: <ColorPixelIcon src="/Coin2.png" /> },
+    media: { title: "Media Player", isMinimized: true, icon: <ColorPixelIcon src="/CD.png" /> }
   });
 
   const toggleMinimize = (key: keyof typeof windows) => {
@@ -90,12 +94,11 @@ export default function Home() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // THE NEW CRT TIMER: Clears the overlay after 1.1s
   useEffect(() => {
     if (systemState === 'booting') {
       const timer = setTimeout(() => {
         setSystemState('desktop');
-      }, 1100); 
+      }, 1000); 
       return () => clearTimeout(timer);
     }
   }, [systemState]);
@@ -171,38 +174,38 @@ export default function Home() {
     );
   }
 
-  // Renders both 'booting' and 'desktop', but overlays the CRT animation if booting!
   return (
     <main className="relative w-screen h-screen overflow-hidden text-black bg-black">
       
-      {/* --- THE CRT BOOT OVERLAY --- */}
       {systemState === 'booting' && (
-        <div className="fixed inset-0 z-[9999] bg-black flex items-center justify-center crt-overlay pointer-events-auto cursor-wait">
+        <div className="fixed inset-0 z-[9999] pointer-events-auto cursor-wait flex flex-col justify-between bg-transparent">
           <style dangerouslySetInnerHTML={{__html: `
-            .crt-overlay {
-              animation: crt-bg-clear 1.1s forwards;
+            .crt-top { animation: slide-out-top 0.7s 0.3s steps(12, end) forwards; }
+            .crt-bottom { animation: slide-out-bottom 0.7s 0.3s steps(12, end) forwards; }
+            .crt-flash { animation: flash-bang 0.3s forwards; }
+            
+            @keyframes flash-bang {
+              0% { background: #000; opacity: 1; }
+              40% { background: #fff; opacity: 1; }
+              100% { background: transparent; opacity: 0; }
             }
-            .crt-beam {
-              /* steps(10, end) is the magic that makes the expansion pixelated/chunky! */
-              animation: crt-beam-anim 1s steps(10, end) forwards;
+            @keyframes slide-out-top {
+              0% { height: 50vh; opacity: 1; }
+              99% { height: 0vh; opacity: 1; }
+              100% { height: 0vh; opacity: 0; display: none; }
             }
-            @keyframes crt-bg-clear {
-              0%, 80% { background: #000; opacity: 1; }
-              100% { background: transparent; opacity: 0; visibility: hidden; }
-            }
-            @keyframes crt-beam-anim {
-              0% { width: 100%; height: 100vh; background: #fff; opacity: 1; box-shadow: 0 0 40px #1ca3ec; }
-              10% { width: 100%; height: 4px; background: #fff; opacity: 1; box-shadow: 0 0 20px #fff, 0 0 40px #1ca3ec; }
-              40% { width: 100%; height: 4px; background: #fff; opacity: 1; box-shadow: 0 0 20px #fff, 0 0 40px #1ca3ec; }
-              80% { width: 100%; height: 100vh; background: #fff; opacity: 1; filter: brightness(1.5); }
-              100% { width: 100%; height: 100vh; background: transparent; opacity: 0; }
+            @keyframes slide-out-bottom {
+              0% { height: 50vh; opacity: 1; }
+              99% { height: 0vh; opacity: 1; }
+              100% { height: 0vh; opacity: 0; display: none; }
             }
           `}} />
-          <div className="crt-beam bg-white"></div>
+          <div className="crt-top w-full h-[50vh] bg-black border-b-[4px] border-white shadow-[0_10px_40px_#1ca3ec] z-20"></div>
+          <div className="crt-bottom w-full h-[50vh] bg-black border-t-[4px] border-white shadow-[0_-10px_40px_#1ca3ec] z-20"></div>
+          <div className="crt-flash absolute inset-0 z-30 pointer-events-none bg-black"></div>
         </div>
       )}
 
-      {/* --- DAY/NIGHT PARALLAX ENGINE --- */}
       <div className={`fixed inset-0 z-0 pointer-events-none transition-colors duration-1000 ease-in-out ${isDarkMode ? 'bg-[#0f172a]' : 'bg-[#1ca3ec]'}`}>
         <div className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${isDarkMode ? 'opacity-0' : 'opacity-100'}`}>
           <div className="absolute inset-0 parallax-layer" style={{ backgroundImage: "url('/1.png')" }}></div>
@@ -332,6 +335,20 @@ export default function Home() {
             </div>
           </Window>
         )}
+
+        {/* --- FRAMELESS MEDIA PLAYER WIDGET --- */}
+        {/* We use Rnd directly here to strip the gray OS Window shell! */}
+        {isMounted && !windows.media.isMinimized && (
+          <Rnd
+            default={{ x: Math.max(20, centerPos.x - 300), y: Math.max(20, centerPos.y - 150), width: 340, height: "auto" }}
+            bounds="parent"
+            dragHandleClassName="player-drag-handle"
+            className="z-50 hover:!z-[80]"
+          >
+            <MusicPlayer onMinimize={() => toggleMinimize("media")} />
+          </Rnd>
+        )}
+
       </div>
 
       {isStartMenuOpen && (
