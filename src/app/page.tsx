@@ -6,8 +6,9 @@ import { useState, useEffect } from "react";
 import Window from "../components/Window";
 import Calendar from "../components/Calendar";
 import MusicPlayer from "../components/MusicPlayer";
+import Me from "../components/Me"; // <-- Imported the new component
 import { createClient } from "@supabase/supabase-js"; 
-import { Rnd } from "react-rnd"; // <-- Imported Rnd directly!
+import { Rnd } from "react-rnd"; 
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -44,13 +45,13 @@ export default function Home() {
   const { data: note, mutate: mutateNote } = useSWR("http://localhost:8000/notes/", fetcher); 
   const { data: financeData, mutate: mutateFinances } = useSWR("http://localhost:8000/finances/", fetcher);
   
-  // Mounted the CD.png icon to trigger the widget
+  // Renamed the core windows to fit the aesthetic
   const [windows, setWindows] = useState({
-    terminal: { title: "Quest Terminal", isMinimized: true, icon: <ColorPixelIcon src="/Home.png" /> },
-    quests: { title: "Active Quests", isMinimized: false, icon: <ColorPixelIcon src="/ChestTreasure.png" /> },
+    profile: { title: "me.exe", isMinimized: false, icon: <ColorPixelIcon src="/Home.png" /> },
+    quests: { title: "Task Manager", isMinimized: false, icon: <ColorPixelIcon src="/ChestTreasure.png" /> },
     notes: { title: "Brain Dump", isMinimized: true, icon: <ColorPixelIcon src="/Pencil.png" /> },
     calendar: { title: "Schedule Sync", isMinimized: true, icon: <ColorPixelIcon src="/Cloud.png" /> },
-    finances: { title: "Financial Vault", isMinimized: true, icon: <ColorPixelIcon src="/Coin2.png" /> },
+    finances: { title: "Wallet", isMinimized: true, icon: <ColorPixelIcon src="/Coin2.png" /> },
     media: { title: "Media Player", isMinimized: true, icon: <ColorPixelIcon src="/CD.png" /> }
   });
 
@@ -63,20 +64,21 @@ export default function Home() {
     setIsStartMenuOpen(false); 
   };
 
+  // Quick Add State (Difficulty repurposed as Category)
   const [title, setTitle] = useState("");
-  const [difficulty, setDifficulty] = useState("minion"); 
+  const [category, setCategory] = useState("life"); 
   const [isDaily, setIsDaily] = useState(false);
   const [dueDate, setDueDate] = useState(""); 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [levelUpData, setLevelUpData] = useState<{ level: number, xp: number } | null>(null);
-  const [subtasks, setSubtasks] = useState<string[]>([]);
-  const [subtaskInput, setSubtaskInput] = useState("");
   const [noteText, setNoteText] = useState("");
   const [isSavingNote, setIsSavingNote] = useState(false);
   const [financeTitle, setFinanceTitle] = useState("");
   const [financeAmount, setFinanceAmount] = useState("");
   const [isIncome, setIsIncome] = useState(false);
   const [isSubmittingFinance, setIsSubmittingFinance] = useState(false);
+
+  const [xpPopups, setXpPopups] = useState<{id: number, text: string, x: number, y: number}[]>([]);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -125,21 +127,32 @@ export default function Home() {
     await supabase.auth.signOut();
   };
 
-  const handleAddSubtask = (e: any) => { e.preventDefault(); if (subtaskInput.trim()) { setSubtasks([...subtasks, subtaskInput.trim()]); setSubtaskInput(""); } };
-  const handleRemoveSubtask = (index: number) => setSubtasks(subtasks.filter((_, i) => i !== index));
   const handleCreateQuest = async (e: any) => {
     e.preventDefault(); if (!title.trim()) return; setIsSubmitting(true);
-    await fetch("http://localhost:8000/tasks/", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title, difficulty, is_daily: isDaily, due_date: dueDate ? dueDate : null, subtasks: subtasks }) });
-    setTitle(""); setDifficulty("minion"); setIsDaily(false); setDueDate(""); setSubtasks([]); mutateTasks(); setIsSubmitting(false);
+    // Sending 'category' into the 'difficulty' field to avoid DB migration
+    await fetch("http://localhost:8000/tasks/", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title, difficulty: category, is_daily: isDaily, due_date: dueDate ? dueDate : null, subtasks: [] }) });
+    setTitle(""); setCategory("life"); setIsDaily(false); setDueDate(""); mutateTasks(); setIsSubmitting(false);
   };
+
   const handleToggleSubtask = async (id: number) => { await fetch(`http://localhost:8000/tasks/subtasks/${id}`, { method: "PUT" }); mutateTasks(); };
-  const handleCompleteQuest = async (id: string) => {
-    const response = await fetch(`http://localhost:8000/tasks/${id}`, { method: "DELETE" });
+  
+  const handleCompleteQuest = async (task: any, e: React.MouseEvent) => {
+    const popupId = Date.now();
+    setXpPopups(prev => [...prev, { id: popupId, text: `+${task.xp_reward} XP`, x: e.clientX, y: e.clientY }]);
+    setTimeout(() => {
+      setXpPopups(prev => prev.filter(p => p.id !== popupId));
+    }, 1200);
+
+    const response = await fetch(`http://localhost:8000/tasks/${task.id}`, { method: "DELETE" });
     const data = await response.json();
     if (data.error) { alert(`SYSTEM WARNING: ${data.error}`); return; }
-    if (player && data.new_level > player.level) setLevelUpData({ level: data.new_level, xp: data.new_total_xp });
+    
+    if (player && data.new_level > player.level) {
+      setLevelUpData({ level: data.new_level, xp: data.new_total_xp });
+    }
     mutateTasks(); mutatePlayer(); 
   };
+  
   const handleSaveNote = async () => { setIsSavingNote(true); await fetch("http://localhost:8000/notes/", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content: noteText }) }); mutateNote(); setIsSavingNote(false); };
   const handleAddFinance = async (e: any) => {
     e.preventDefault(); if (!financeTitle.trim() || !financeAmount) return; setIsSubmittingFinance(true);
@@ -177,28 +190,69 @@ export default function Home() {
   return (
     <main className="relative w-screen h-screen overflow-hidden text-black bg-black">
       
+      {/* GLOBAL ANIMATIONS */}
+      <style dangerouslySetInnerHTML={{__html: `
+        @keyframes floatUp {
+          0% { transform: translateY(0px) scale(0.5); opacity: 1; }
+          20% { transform: translateY(-20px) scale(1.2); opacity: 1; }
+          100% { transform: translateY(-80px) scale(1); opacity: 0; }
+        }
+        .animate-float-xp { animation: floatUp 1.2s ease-out forwards; }
+        
+        @keyframes modalDrop {
+          0% { transform: translateY(-50px); opacity: 0; }
+          100% { transform: translateY(0px); opacity: 1; }
+        }
+        .animate-modal { animation: modalDrop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+        
+        /* The Animated Pixel Background for Task Manager */
+        @keyframes slide-bg {
+          from { background-position: 0 0, 10px 10px; }
+          to { background-position: -40px -40px, -30px -30px; }
+        }
+        .task-bg-animated {
+          background-color: #f1f5f9;
+          background-image: 
+            repeating-linear-gradient(45deg, #e2e8f0 25%, transparent 25%, transparent 75%, #e2e8f0 75%, #e2e8f0), 
+            repeating-linear-gradient(45deg, #e2e8f0 25%, #f1f5f9 25%, #f1f5f9 75%, #e2e8f0 75%, #e2e8f0);
+          background-position: 0 0, 10px 10px;
+          background-size: 20px 20px;
+          animation: slide-bg 15s linear infinite;
+        }
+      `}} />
+
+      {/* RENDER FLOATING XP POPUPS */}
+      {xpPopups.map((popup) => (
+        <div key={popup.id} className="fixed pointer-events-none z-[9999] animate-float-xp font-bold text-2xl text-[#facc15]" style={{ left: popup.x - 20, top: popup.y - 20, textShadow: '2px 2px 0 #000, -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000' }}>
+          {popup.text}
+        </div>
+      ))}
+
+      {/* LEVEL UP MODAL */}
+      {levelUpData && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black bg-opacity-70 backdrop-blur-sm">
+          <div className="animate-modal bg-white border-[4px] border-black p-8 shadow-[12px_12px_0_rgba(0,0,0,1)] flex flex-col items-center max-w-md text-center">
+            <h2 className="text-5xl font-bold text-[#facc15] mb-2" style={{ textShadow: '3px 3px 0 #000' }}>LEVEL UP!</h2>
+            <p className="text-2xl font-bold text-black mb-6">You have reached <span className="text-[#5b7c99]">Level {levelUpData.level}</span>.</p>
+            <div className="w-24 h-24 bg-[#dfdfdf] border-[2px] border-black flex items-center justify-center text-4xl mb-6 shadow-[inset_4px_4px_0_rgba(0,0,0,0.1)]">
+              🎉
+            </div>
+            <button onClick={() => setLevelUpData(null)} className="bg-[#5b7c99] text-white font-bold text-xl px-8 py-3 border-[2px] border-black shadow-[4px_4px_0_#000] hover:-translate-y-1 hover:shadow-[6px_6px_0_#000] active:translate-y-1 active:shadow-none transition-all">
+              CONTINUE
+            </button>
+          </div>
+        </div>
+      )}
+
       {systemState === 'booting' && (
-        <div className="fixed inset-0 z-[9999] pointer-events-auto cursor-wait flex flex-col justify-between bg-transparent">
+        <div className="fixed inset-0 z-[9998] pointer-events-auto cursor-wait flex flex-col justify-between bg-transparent">
           <style dangerouslySetInnerHTML={{__html: `
             .crt-top { animation: slide-out-top 0.7s 0.3s steps(12, end) forwards; }
             .crt-bottom { animation: slide-out-bottom 0.7s 0.3s steps(12, end) forwards; }
             .crt-flash { animation: flash-bang 0.3s forwards; }
-            
-            @keyframes flash-bang {
-              0% { background: #000; opacity: 1; }
-              40% { background: #fff; opacity: 1; }
-              100% { background: transparent; opacity: 0; }
-            }
-            @keyframes slide-out-top {
-              0% { height: 50vh; opacity: 1; }
-              99% { height: 0vh; opacity: 1; }
-              100% { height: 0vh; opacity: 0; display: none; }
-            }
-            @keyframes slide-out-bottom {
-              0% { height: 50vh; opacity: 1; }
-              99% { height: 0vh; opacity: 1; }
-              100% { height: 0vh; opacity: 0; display: none; }
-            }
+            @keyframes flash-bang { 0% { background: #000; opacity: 1; } 40% { background: #fff; opacity: 1; } 100% { background: transparent; opacity: 0; } }
+            @keyframes slide-out-top { 0% { height: 50vh; opacity: 1; } 99% { height: 0vh; opacity: 1; } 100% { height: 0vh; opacity: 0; display: none; } }
+            @keyframes slide-out-bottom { 0% { height: 50vh; opacity: 1; } 99% { height: 0vh; opacity: 1; } 100% { height: 0vh; opacity: 0; display: none; } }
           `}} />
           <div className="crt-top w-full h-[50vh] bg-black border-b-[4px] border-white shadow-[0_10px_40px_#1ca3ec] z-20"></div>
           <div className="crt-bottom w-full h-[50vh] bg-black border-t-[4px] border-white shadow-[0_-10px_40px_#1ca3ec] z-20"></div>
@@ -213,7 +267,6 @@ export default function Home() {
           <div className="absolute inset-0 parallax-layer" style={{ backgroundImage: "url('/3.png')", animation: "pan-left 120s linear infinite" }}></div>
           <div className="absolute inset-0 parallax-layer" style={{ backgroundImage: "url('/4.png')", animation: "pan-left 60s linear infinite" }}></div>
         </div>
-
         <div className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${isDarkMode ? 'opacity-100' : 'opacity-0'}`}>
           <div className="absolute inset-0 parallax-layer" style={{ backgroundImage: "url('/1_dark.png')" }}></div>
           <div className="absolute inset-0 parallax-layer" style={{ backgroundImage: "url('/2_dark.png')", animation: "pan-left 300s linear infinite" }}></div>
@@ -226,18 +279,9 @@ export default function Home() {
         {(Object.keys(windows) as Array<keyof typeof windows>).map((key) => {
           const win = windows[key];
           return (
-            <button 
-              key={key} 
-              onClick={() => toggleMinimize(key)}
-              className={`flex flex-col items-center gap-2 group transition-all ${!win.isMinimized ? 'opacity-40' : 'opacity-100'}`}
-            >
+            <button key={key} onClick={() => toggleMinimize(key)} className={`flex flex-col items-center gap-2 group transition-all ${!win.isMinimized ? 'opacity-40' : 'opacity-100'}`}>
               {win.icon}
-              <span 
-                className="text-[14px] font-bold text-white tracking-wide text-center leading-tight drop-shadow-[0px_4px_4px_rgba(0,0,0,0.5)]"
-                style={{ textShadow: '1px 1px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 0px 2px 0 #000' }}
-              >
-                {win.title}
-              </span>
+              <span className="text-[14px] font-bold text-white tracking-wide text-center leading-tight drop-shadow-[0px_4px_4px_rgba(0,0,0,0.5)]" style={{ textShadow: '1px 1px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 0px 2px 0 #000' }}>{win.title}</span>
             </button>
           )
         })}
@@ -245,28 +289,93 @@ export default function Home() {
 
       <div className="relative z-10 w-full h-[calc(100vh-48px)] overflow-hidden">
         
-        {isMounted && !windows.terminal.isMinimized && (
-          <Window title="Quest Terminal" defaultX={Math.max(20, centerPos.x - 400)} defaultY={Math.max(20, centerPos.y - 50)} defaultWidth={350} defaultHeight={550} onMinimize={() => toggleMinimize("terminal")}>
-            <div className="h-full w-full overflow-y-auto custom-scrollbar pr-2 min-h-0 flex flex-col">
-              <form onSubmit={handleCreateQuest} className="flex flex-col gap-3 min-h-max pb-2">
-                <p className="font-bold border-b-[2px] border-black pb-1 text-2xl shrink-0">New Objective</p>
-                <div className="flex flex-col gap-1 shrink-0"><label className="text-lg font-bold">Title:</label><input type="text" value={title} onChange={(e) => setTitle(e.target.value)} className="w-full p-1 text-xl border-[2px] border-black bg-white outline-none focus:bg-[#f0f0f0]" /></div>
-                <div className="flex flex-col gap-1 shrink-0"><label className="text-lg font-bold">Difficulty:</label><select value={difficulty} onChange={(e) => setDifficulty(e.target.value)} className="w-full p-1 text-xl border-[2px] border-black bg-white outline-none cursor-pointer focus:bg-[#f0f0f0]"><option value="minion">🟢 Minion</option><option value="elite">🟡 Elite</option><option value="boss">🔴 Boss Battle</option></select></div>
-                <div className="flex flex-col gap-1 shrink-0"><label className="text-lg font-bold">Deadline:</label><input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="w-full p-1 text-xl border-[2px] border-black bg-white outline-none disabled:bg-[#dfdfdf] focus:bg-[#f0f0f0]" disabled={isDaily} /></div>
-                
-                <div className="flex flex-col gap-1 mt-1 border-t-[2px] border-dashed border-black pt-2 shrink-0">
-                  <label className="text-lg font-bold shrink-0">Sub-Objectives:</label>
-                  <div className="flex gap-1 shrink-0"><input type="text" value={subtaskInput} onChange={(e) => setSubtaskInput(e.target.value)} className="flex-1 min-w-0 p-1 text-lg border-[2px] border-black bg-white outline-none focus:bg-[#f0f0f0]" disabled={isDaily}/>
-                  <button onClick={handleAddSubtask} disabled={isDaily || !subtaskInput.trim()} className="bg-[#5b7c99] hover:bg-black text-[#f9f6e6] px-4 rounded-none text-xl font-bold border-[2px] border-black shadow-[2px_2px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-[2px] active:translate-y-[2px] transition-all disabled:opacity-30 shrink-0">+</button></div>
-                  {subtasks.length > 0 && (
-                    <ul className="mt-2 flex flex-col gap-1 p-1 bg-white border-[2px] border-black shrink-0">
-                      {subtasks.map((st, idx) => (<li key={idx} className="flex justify-between items-center text-xl bg-[#dfdfdf] px-2 py-1 border border-black shrink-0"><span className="truncate mr-2">- {st}</span><button onClick={() => handleRemoveSubtask(idx)} type="button" className="text-black font-bold hover:bg-black hover:text-white px-1">X</button></li>))}
-                    </ul>
+        {/* THE NEW me.exe COMPONENT */}
+        {isMounted && !windows.profile.isMinimized && (
+          <Window title="me.exe" defaultX={Math.max(20, centerPos.x - 400)} defaultY={Math.max(20, centerPos.y - 100)} defaultWidth={280} defaultHeight={420} onMinimize={() => toggleMinimize("profile")}>
+            <Me player={player} />
+          </Window>
+        )}
+
+        {/* --- REBUILT TASK MANAGER (No dropdowns, internal animated background) --- */}
+        {isMounted && !windows.quests.isMinimized && (
+          <Window title="Task Manager" defaultX={centerPos.x - 50} defaultY={centerPos.y - 50} defaultWidth={500} defaultHeight={550} onMinimize={() => toggleMinimize("quests")}>
+            <div className="flex flex-col h-full min-h-0 bg-white">
+              
+              {/* Quick Add Bar (No Dropdowns) */}
+              <div className="bg-white border-b-[2px] border-black p-3 shrink-0 shadow-[0_4px_0_rgba(0,0,0,0.1)] z-10">
+                <form onSubmit={handleCreateQuest} className="flex flex-col gap-2 w-full">
+                  <div className="flex gap-2">
+                    <input 
+                      type="text" placeholder="Type task here..." value={title} onChange={(e) => setTitle(e.target.value)} 
+                      className="flex-1 bg-white border-[2px] border-black px-2 py-1 text-lg font-bold outline-none placeholder:text-gray-400 shadow-[inset_2px_2px_0_rgba(0,0,0,0.1)] focus:bg-[#f8fafc]"
+                    />
+                    <button type="submit" disabled={!title.trim() || isSubmitting} className="bg-black text-white px-4 py-1 text-lg font-bold hover:bg-[#a5b4fc] hover:text-black transition-colors disabled:opacity-50 border-[2px] border-black shadow-[2px_2px_0_#000] active:translate-y-[2px] active:shadow-none">
+                      ADD
+                    </button>
+                  </div>
+                  
+                  {/* Category Buttons (Replaces the `<select>` dropdown) */}
+                  <div className="flex gap-2 text-xs font-bold uppercase tracking-widest overflow-x-auto">
+                    <button type="button" onClick={() => setCategory("life")} className={`border-[2px] border-black px-2 py-1 transition-colors ${category === "life" ? 'bg-[#fbcfe8] shadow-[inset_2px_2px_0_rgba(0,0,0,0.2)]' : 'bg-white hover:bg-gray-100'}`}>Life</button>
+                    <button type="button" onClick={() => setCategory("work")} className={`border-[2px] border-black px-2 py-1 transition-colors ${category === "work" ? 'bg-[#bae6fd] shadow-[inset_2px_2px_0_rgba(0,0,0,0.2)]' : 'bg-white hover:bg-gray-100'}`}>Work</button>
+                    <button type="button" onClick={() => setCategory("study")} className={`border-[2px] border-black px-2 py-1 transition-colors ${category === "study" ? 'bg-[#fef08a] shadow-[inset_2px_2px_0_rgba(0,0,0,0.2)]' : 'bg-white hover:bg-gray-100'}`}>Study</button>
+                    <button type="button" onClick={() => setCategory("art")} className={`border-[2px] border-black px-2 py-1 transition-colors ${category === "art" ? 'bg-[#e9d5ff] shadow-[inset_2px_2px_0_rgba(0,0,0,0.2)]' : 'bg-white hover:bg-gray-100'}`}>Art</button>
+                    
+                    <div className="w-[1px] h-full bg-gray-300 mx-1"></div>
+                    
+                    <button type="button" onClick={() => setIsDaily(!isDaily)} className={`border-[2px] border-black px-2 py-1 transition-colors ${isDaily ? 'bg-[#10b981] text-white shadow-[inset_2px_2px_0_rgba(0,0,0,0.2)]' : 'bg-white hover:bg-gray-100'}`}>
+                      {isDaily ? 'Daily' : 'One-off'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+
+              {/* Task Canvas with Animated Background */}
+              <div className="flex-1 overflow-y-auto custom-scrollbar relative p-4 task-bg-animated">
+                <div className="relative z-10 flex flex-col gap-6">
+                  
+                  {/* Daily Routines */}
+                  {tasks && tasks.filter((t: any) => t.is_daily).length > 0 && (
+                    <div className="flex flex-col gap-2">
+                      <div className="inline-block bg-black text-white border-[2px] border-black px-2 py-1 mb-2 w-fit shadow-[2px_2px_0_rgba(255,255,255,1)]">
+                        <h2 className="font-bold text-sm tracking-widest uppercase">ROUTINES</h2>
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        {tasks.filter((t: any) => t.is_daily).map((task: any) => (
+                          <div key={task.id} className="flex justify-between items-center bg-white border-[2px] border-black p-2 shadow-[2px_2px_0_#000] hover:-translate-y-0.5 hover:shadow-[4px_4px_0_#000] transition-all">
+                            <label className="flex items-center gap-3 cursor-pointer flex-1">
+                              <input type="checkbox" onChange={(e) => handleCompleteQuest(task, e as unknown as React.MouseEvent)} className="appearance-none shrink-0 w-5 h-5 border-[2px] border-black bg-white cursor-pointer checked:bg-black checked:after:content-['✓'] checked:after:text-white checked:after:font-bold checked:after:flex checked:after:items-center checked:after:justify-center checked:after:h-full transition-colors hover:bg-gray-200" />
+                              <span className="font-bold text-md text-black truncate">{task.title}</span>
+                            </label>
+                            <span className="px-1.5 py-0.5 text-[10px] font-bold border-[2px] border-black bg-[#f1f5f9] text-black uppercase">{task.difficulty}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   )}
+
+                  {/* Active Tasks */}
+                  <div className="flex flex-col gap-2">
+                    <div className="inline-block bg-white text-black border-[2px] border-black px-2 py-1 mb-2 w-fit shadow-[2px_2px_0_#000]">
+                      <h2 className="font-bold text-sm tracking-widest uppercase">TO-DO LIST</h2>
+                    </div>
+                    {tasks && tasks.filter((t: any) => !t.is_daily).length > 0 ? tasks.filter((t: any) => !t.is_daily).map((task: any) => (
+                      <div key={task.id} className="flex flex-col bg-white border-[2px] border-black p-2 shadow-[2px_2px_0_#000] hover:-translate-y-0.5 hover:shadow-[4px_4px_0_#000] transition-all">
+                        <div className="flex items-center justify-between gap-4">
+                          <label className="flex items-center gap-3 cursor-pointer flex-1 overflow-hidden">
+                            <input type="checkbox" onChange={(e) => handleCompleteQuest(task, e as unknown as React.MouseEvent)} className="appearance-none shrink-0 w-5 h-5 border-[2px] border-black bg-white cursor-pointer checked:bg-black checked:after:content-['✓'] checked:after:text-white checked:after:font-bold checked:after:flex checked:after:items-center checked:after:justify-center checked:after:h-full transition-colors hover:bg-gray-200" />
+                            <span className="font-bold text-md text-black truncate">{task.title}</span>
+                          </label>
+                          <span className="px-1.5 py-0.5 text-[10px] font-bold border-[2px] border-black bg-[#f1f5f9] text-black uppercase">{task.difficulty}</span>
+                        </div>
+                      </div>
+                    )) : (
+                      <p className="text-black font-bold text-sm italic bg-white p-2 border-[2px] border-black w-fit">Nothing to do!</p>
+                    )}
+                  </div>
+
                 </div>
-                <div className="flex items-center gap-3 mt-2 shrink-0"><input type="checkbox" id="daily-check" checked={isDaily} onChange={(e) => { setIsDaily(e.target.checked); if (e.target.checked) { setDueDate(""); setSubtasks([]); setSubtaskInput(""); } }} className="cursor-pointer w-4 h-4 border-[2px] border-black accent-[#5b7c99] rounded-none" disabled={isSubmitting}/><label htmlFor="daily-check" className="text-lg font-bold cursor-pointer">Register as Daily</label></div>
-                <div className="mt-2 flex justify-end shrink-0"><button type="submit" disabled={!title.trim()} className="bg-[#5b7c99] hover:bg-black text-[#f9f6e6] px-6 py-2 text-xl font-bold border-[2px] border-black shadow-[2px_2px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-[2px] active:translate-y-[2px] transition-all disabled:opacity-30">Add Quest</button></div>
-              </form>
+              </div>
             </div>
           </Window>
         )}
@@ -276,35 +385,7 @@ export default function Home() {
             <div className="flex flex-col gap-2 h-full min-h-0">
               <p className="font-bold border-b-[2px] border-black pb-1 text-2xl shrink-0">Scratchpad</p>
               <textarea value={noteText} onChange={(e) => setNoteText(e.target.value)} className="w-full flex-1 min-h-0 overflow-y-auto custom-scrollbar p-2 text-xl bg-white border-[2px] border-black outline-none resize-none focus:bg-[#f0f0f0] transition-colors text-black" placeholder="Notes..." />
-              <div className="mt-1 flex justify-end shrink-0"><button onClick={handleSaveNote} disabled={isSavingNote} className="bg-[#5b7c99] hover:bg-black text-[#f9f6e6] px-6 py-1 text-xl font-bold border-[2px] border-black shadow-[2px_2px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-[2px] active:translate-y-[2px] transition-all disabled:opacity-30">Save</button></div>
-            </div>
-          </Window>
-        )}
-
-        {isMounted && !windows.quests.isMinimized && (
-          <Window title="Active Quests" defaultX={centerPos.x} defaultY={centerPos.y} defaultWidth={450} defaultHeight={500} onMinimize={() => toggleMinimize("quests")}>
-            <div className="flex flex-col gap-2 h-full min-h-0">
-              <p className="font-bold border-b-[2px] border-black pb-1 text-2xl shrink-0">Core Objectives</p>
-              {tasks && tasks.length > 0 ? (
-                <ul className="mt-2 flex flex-col gap-4 overflow-y-auto pr-2 custom-scrollbar flex-1 min-h-0">
-                  {tasks.map((task: Task) => (
-                    <li key={task.id} className="flex flex-col gap-2 bg-white p-2 border-[2px] border-black shadow-[2px_2px_0px_rgba(0,0,0,1)] shrink-0">
-                      <div className="flex items-start gap-3 group">
-                        <button onClick={() => handleCompleteQuest(task.id)} className="w-6 h-6 mt-[2px] shrink-0 bg-[#dfdfdf] border-[2px] border-black hover:bg-[#5b7c99] transition-colors"></button>
-                        <div className="flex flex-col leading-tight w-full min-w-0">
-                          <span className="text-2xl font-bold text-black break-words">{task.title} {task.is_daily && <span className="ml-2 text-lg bg-[#5b7c99] text-[#f9f6e6] px-1 font-bold inline-block">DAILY</span>} {task.due_date && <span className="ml-2 text-lg bg-white text-black border-[2px] border-black px-1 font-bold inline-block">DUE: {task.due_date}</span>}</span>
-                          <span className="text-lg font-bold text-black mt-1 border-t-[2px] border-black border-dashed pt-1 w-fit">REWARD: {task.xp_reward} XP</span>
-                        </div>
-                      </div>
-                      {task.subtasks && task.subtasks.length > 0 && (
-                        <div className="ml-8 pl-2 border-l-[2px] border-black flex flex-col gap-1.5 mt-2">
-                          {task.subtasks.map((sub) => (<div key={sub.id} className="flex items-center gap-3"><input type="checkbox" checked={sub.is_completed} onChange={() => handleToggleSubtask(sub.id)} className="cursor-pointer w-4 h-4 accent-[#5b7c99] border-[2px] border-black shrink-0"/><span className={`text-xl font-bold break-words ${sub.is_completed ? 'line-through opacity-40 text-black' : 'text-black'}`}>{sub.title}</span></div>))}
-                        </div>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              ) : (<p className="text-xl py-4 opacity-50 text-center font-bold shrink-0">Clear.</p>)}
+              <div className="mt-1 flex justify-end shrink-0"><button onClick={handleSaveNote} disabled={isSavingNote} className="bg-black hover:bg-[#a5b4fc] hover:text-black text-white px-6 py-1 text-xl font-bold border-[2px] border-black shadow-[2px_2px_0px_#000] active:shadow-none active:translate-x-[2px] active:translate-y-[2px] transition-all">Save</button></div>
             </div>
           </Window>
         )}
@@ -318,78 +399,53 @@ export default function Home() {
         )}
 
         {isMounted && !windows.finances.isMinimized && (
-          <Window title="Financial Vault" defaultX={Math.max(20, centerPos.x - 200)} defaultY={Math.max(20, centerPos.y - 150)} defaultWidth={400} defaultHeight={450} onMinimize={() => toggleMinimize("finances")}>
+          <Window title="Wallet" defaultX={Math.max(20, centerPos.x - 200)} defaultY={Math.max(20, centerPos.y - 150)} defaultWidth={400} defaultHeight={450} onMinimize={() => toggleMinimize("finances")}>
             <div className="flex flex-col gap-3 h-full min-h-0">
-              <div className="bg-white p-3 text-center border-[2px] border-black shadow-[inset_2px_2px_0px_rgba(0,0,0,0.2)] shrink-0"><p className="text-lg tracking-widest uppercase font-bold text-black">Balance</p><p className="text-4xl font-bold tracking-widest text-black mt-1">{financeData ? `$${financeData.balance.toFixed(2)}` : "..."}</p></div>
+              <div className="bg-white p-3 text-center border-[2px] border-black shadow-[inset_2px_2px_0px_rgba(0,0,0,0.1)] shrink-0"><p className="text-lg tracking-widest uppercase font-bold text-black">Balance</p><p className="text-4xl font-bold tracking-widest text-black mt-1">{financeData ? `$${financeData.balance.toFixed(2)}` : "..."}</p></div>
               <form onSubmit={handleAddFinance} className="flex gap-2 items-end border-b-[2px] border-black pb-3 mt-2 shrink-0">
-                <div className="flex flex-col gap-1 flex-1"><label className="text-lg font-bold text-black">Entry:</label><input type="text" value={financeTitle} onChange={(e) => setFinanceTitle(e.target.value)} className="w-full p-1 text-xl bg-white border-[2px] border-black outline-none focus:bg-[#f0f0f0] text-black" disabled={isSubmittingFinance}/></div>
-                <div className="flex flex-col gap-1 w-[90px] shrink-0"><label className="text-lg font-bold text-black">Amt:</label><input type="number" step="0.01" value={financeAmount} onChange={(e) => setFinanceAmount(e.target.value)} className="w-full p-1 text-xl bg-white border-[2px] border-black outline-none focus:bg-[#f0f0f0] text-black" disabled={isSubmittingFinance}/></div>
-                <div className="flex flex-col gap-1 w-[90px] shrink-0"><label className="text-lg font-bold text-black">Type:</label><select value={isIncome ? "income" : "expense"} onChange={(e) => setIsIncome(e.target.value === "income")} className="w-full p-1 text-xl bg-white border-[2px] border-black outline-none cursor-pointer focus:bg-[#f0f0f0] text-black" disabled={isSubmittingFinance}><option value="expense">Out</option><option value="income">In</option></select></div>
-                <button type="submit" disabled={isSubmittingFinance || !financeTitle.trim() || !financeAmount} className="bg-[#dfdfdf] hover:bg-black hover:text-white text-black px-4 py-1 text-lg font-bold border-[2px] border-black shadow-[2px_2px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-[2px] active:translate-y-[2px] transition-all disabled:opacity-30 shrink-0">ADD</button>
+                <div className="flex flex-col gap-1 flex-1"><label className="text-sm font-bold uppercase text-black">Entry:</label><input type="text" value={financeTitle} onChange={(e) => setFinanceTitle(e.target.value)} className="w-full p-1 text-md bg-white border-[2px] border-black outline-none focus:bg-[#f0f0f0] text-black" disabled={isSubmittingFinance}/></div>
+                <div className="flex flex-col gap-1 w-[80px] shrink-0"><label className="text-sm font-bold uppercase text-black">Amt:</label><input type="number" step="0.01" value={financeAmount} onChange={(e) => setFinanceAmount(e.target.value)} className="w-full p-1 text-md bg-white border-[2px] border-black outline-none focus:bg-[#f0f0f0] text-black" disabled={isSubmittingFinance}/></div>
+                <div className="flex flex-col gap-1 w-[80px] shrink-0"><label className="text-sm font-bold uppercase text-black">Type:</label><select value={isIncome ? "income" : "expense"} onChange={(e) => setIsIncome(e.target.value === "income")} className="w-full p-1 text-md bg-white border-[2px] border-black outline-none cursor-pointer focus:bg-[#f0f0f0] text-black" disabled={isSubmittingFinance}><option value="expense">Out</option><option value="income">In</option></select></div>
+                <button type="submit" disabled={isSubmittingFinance || !financeTitle.trim() || !financeAmount} className="bg-black text-white hover:bg-[#a5b4fc] hover:text-black px-3 py-1 text-md font-bold border-[2px] border-black shadow-[2px_2px_0px_#000] active:shadow-none active:translate-x-[2px] active:translate-y-[2px] transition-all disabled:opacity-30 shrink-0">ADD</button>
               </form>
               <ul className="flex flex-col gap-1 overflow-y-auto custom-scrollbar pr-1 flex-1 min-h-0">
                 {financeData && financeData.transactions.map((t: Transaction) => (
-                  <li key={t.id} className="flex justify-between items-center text-xl bg-white p-1 border-[2px] border-black group transition-colors shrink-0"><span className="truncate w-[180px] font-bold text-black">{t.title}</span><div className="flex items-center gap-2 shrink-0"><span className={`font-bold ${t.is_income ? "text-black" : "text-black"}`}>{t.is_income ? "+" : "-"}${t.amount.toFixed(2)}</span><button onClick={() => handleDeleteFinance(t.id)} className="text-xl text-white bg-black opacity-0 group-hover:opacity-100 font-bold hover:bg-white hover:text-black px-2 border-[2px] border-black">X</button></div></li>
+                  <li key={t.id} className="flex justify-between items-center text-md bg-white p-1 border-[2px] border-black group transition-colors shrink-0"><span className="truncate w-[180px] font-bold text-black">{t.title}</span><div className="flex items-center gap-2 shrink-0"><span className={`font-bold ${t.is_income ? "text-black" : "text-black"}`}>{t.is_income ? "+" : "-"}${t.amount.toFixed(2)}</span><button onClick={() => handleDeleteFinance(t.id)} className="text-md text-white bg-black opacity-0 group-hover:opacity-100 font-bold hover:bg-[#ef4444] px-2 border-[2px] border-black">X</button></div></li>
                 ))}
               </ul>
             </div>
           </Window>
         )}
 
-        {/* --- FRAMELESS MEDIA PLAYER WIDGET --- */}
-        {/* We use Rnd directly here to strip the gray OS Window shell! */}
         {isMounted && !windows.media.isMinimized && (
-          <Rnd
-            default={{ x: Math.max(20, centerPos.x - 300), y: Math.max(20, centerPos.y - 150), width: 340, height: "auto" }}
-            bounds="parent"
-            dragHandleClassName="player-drag-handle"
-            className="z-50 hover:!z-[80]"
-          >
+          <Rnd default={{ x: Math.max(20, centerPos.x - 300), y: Math.max(20, centerPos.y - 150), width: 340, height: "auto" }} bounds="parent" dragHandleClassName="player-drag-handle" className="z-50 hover:!z-[80]">
             <MusicPlayer onMinimize={() => toggleMinimize("media")} />
           </Rnd>
         )}
 
       </div>
 
-      {isStartMenuOpen && (
-        <div className="fixed inset-0 z-[95]" onClick={() => setIsStartMenuOpen(false)}></div>
-      )}
+      {isStartMenuOpen && <div className="fixed inset-0 z-[95]" onClick={() => setIsStartMenuOpen(false)}></div>}
 
       {isStartMenuOpen && (
         <div className="fixed bottom-[48px] left-0 z-[101] bg-[#dfdfdf] border-[2px] border-black shadow-[4px_4px_0px_rgba(0,0,0,1)] flex min-h-[350px]">
-          
-          <div className="w-10 bg-[#5b7c99] flex flex-col justify-end items-center pb-2 border-r-[2px] border-black">
-            <span className="text-white font-bold tracking-widest text-2xl drop-shadow-[1px_1px_0px_rgba(0,0,0,0.8)] whitespace-nowrap -rotate-90 mb-12">
-              ZENITH OS
-            </span>
+          <div className="w-10 bg-black flex flex-col justify-end items-center pb-2 border-r-[2px] border-black">
+            <span className="text-white font-bold tracking-widest text-2xl whitespace-nowrap -rotate-90 mb-12">ZENITH OS</span>
           </div>
-
           <div className="flex flex-col flex-1 py-1 min-w-[220px] justify-between">
             <div className="flex flex-col">
               {(Object.keys(windows) as Array<keyof typeof windows>).map((key) => {
                 const win = windows[key];
                 return (
-                  <button 
-                    key={key} 
-                    onClick={() => launchApp(key as keyof typeof windows)}
-                    className="flex items-center gap-3 px-4 py-2 hover:bg-black hover:text-white transition-colors text-black font-bold text-xl text-left group"
-                  >
-                    <div className="scale-75 origin-left">{win.icon}</div>
-                    {win.title}
+                  <button key={key} onClick={() => launchApp(key as keyof typeof windows)} className="flex items-center gap-3 px-4 py-2 hover:bg-[#a5b4fc] transition-colors text-black font-bold text-xl text-left group">
+                    <div className="scale-75 origin-left">{win.icon}</div>{win.title}
                   </button>
                 )
               })}
             </div>
-
             <div className="flex flex-col border-t-[2px] border-black pt-1 mt-2">
-              <button 
-                onClick={handleLogout}
-                className="flex items-center gap-3 px-4 py-2 hover:bg-[#5b7c99] hover:text-white transition-colors text-black font-bold text-xl text-left group"
-              >
-                <div className="scale-75 origin-left">
-                  <ColorPixelIcon src="/Power.png" />
-                </div>
-                Shut Down...
+              <button onClick={handleLogout} className="flex items-center gap-3 px-4 py-2 hover:bg-[#ef4444] hover:text-white transition-colors text-black font-bold text-xl text-left group">
+                <div className="scale-75 origin-left"><ColorPixelIcon src="/Power.png" /></div>Shut Down
               </button>
             </div>
           </div>
@@ -397,58 +453,27 @@ export default function Home() {
       )}
 
       <div className="fixed bottom-0 left-0 w-full h-12 bg-[#dfdfdf] border-t-[2px] border-black flex items-center px-2 z-[100] justify-between shadow-[0px_-2px_10px_rgba(0,0,0,0.2)]">
-        
         <div className="flex items-center gap-2 overflow-x-auto flex-1 pr-2">
-          <button 
-            onClick={() => setIsStartMenuOpen(!isStartMenuOpen)}
-            className={`shrink-0 flex items-center gap-2 font-bold text-2xl px-3 py-1 border-[2px] border-black transition-all
-              ${isStartMenuOpen 
-                ? 'bg-black text-white shadow-none translate-x-[2px] translate-y-[2px]' 
-                : 'bg-white hover:bg-[#5b7c99] hover:text-white text-black shadow-[2px_2px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-[2px] active:translate-y-[2px]'
-              }`}
-          >
-            <div className={`w-4 h-4 border ${isStartMenuOpen ? 'bg-white border-black' : 'bg-black border-white'}`}></div>
-            START
+          <button onClick={() => setIsStartMenuOpen(!isStartMenuOpen)} className={`shrink-0 flex items-center gap-2 font-bold text-xl px-3 py-1 border-[2px] border-black transition-all ${isStartMenuOpen ? 'bg-black text-white shadow-none translate-x-[2px] translate-y-[2px]' : 'bg-white hover:bg-[#a5b4fc] text-black shadow-[2px_2px_0px_#000] active:shadow-none active:translate-x-[2px] active:translate-y-[2px]'}`}>
+            <div className={`w-4 h-4 border ${isStartMenuOpen ? 'bg-white border-black' : 'bg-black border-white'}`}></div>START
           </button>
-          
           <div className="shrink-0 w-[2px] h-8 bg-black mx-1"></div>
-
           {(Object.keys(windows) as Array<keyof typeof windows>).map((key) => {
             const win = windows[key];
             if (win.isMinimized) return null;
-
             return (
-              <button 
-                key={key}
-                onClick={() => toggleMinimize(key)}
-                className="shrink-0 px-3 py-1 h-9 text-xl font-bold min-w-[120px] max-w-[160px] truncate border-[2px] border-black flex items-center justify-center transition-all bg-[#5b7c99] text-white shadow-none translate-x-[2px] translate-y-[2px]"
-              >
-                {win.title}
-              </button>
+              <button key={key} onClick={() => toggleMinimize(key)} className="shrink-0 px-3 py-1 h-9 text-sm font-bold min-w-[120px] max-w-[160px] truncate border-[2px] border-black flex items-center justify-center transition-all bg-white text-black shadow-[2px_2px_0_#000] active:shadow-none active:translate-x-[2px] active:translate-y-[2px] hover:bg-[#a5b4fc]">{win.title}</button>
             )
           })}
         </div>
-
         <div className="flex items-center gap-2 shrink-0">
-          
-          <button 
-            onClick={() => setIsDarkMode(!isDarkMode)}
-            className="w-10 h-10 bg-white border-[2px] border-black flex items-center justify-center hover:bg-[#dfdfdf] transition-colors shadow-[inset_2px_2px_0px_rgba(0,0,0,0.2)] group"
-            title="Toggle Day/Night"
-          >
-            <img 
-              src={isDarkMode ? '/Sleep.png' : '/Sun.png'} 
-              alt="theme toggle" 
-              className="w-6 h-6 group-hover:scale-125 transition-transform duration-200" 
-              style={{ imageRendering: 'pixelated' }} 
-            />
+          <button onClick={() => setIsDarkMode(!isDarkMode)} className="w-10 h-10 bg-white border-[2px] border-black flex items-center justify-center hover:bg-[#e2e8f0] transition-colors shadow-[inset_2px_2px_0px_rgba(0,0,0,0.2)] group" title="Toggle Day/Night">
+            <img src={isDarkMode ? '/Sleep.png' : '/Sun.png'} alt="theme toggle" className="w-6 h-6 group-hover:scale-125 transition-transform duration-200" style={{ imageRendering: 'pixelated' }} />
           </button>
-
           {player && (
-            <div className="flex items-center gap-2 bg-white border-[2px] border-black px-3 py-1 h-10 shadow-[inset_2px_2px_0px_rgba(0,0,0,0.2)] cursor-default">
-              <span className="text-[16px] font-bold tracking-widest text-[#5b7c99]">LVL {player.level}</span>
-              <div className="w-24 h-3 bg-[#dfdfdf] border-[1px] border-black p-[1px]"><div className="h-full bg-[#5b7c99] transition-all duration-500 ease-out" style={{ width: `${player.xp % 100}%` }}></div></div>
-              <span className="text-[14px] font-bold text-black">{player.xp} XP</span>
+            <div className="flex items-center gap-2 bg-white border-[2px] border-black px-3 py-1 h-10 shadow-[inset_2px_2px_0px_rgba(0,0,0,0.1)] cursor-default">
+              <span className="text-[12px] font-bold tracking-widest text-black">LVL {player.level}</span>
+              <div className="w-16 h-3 bg-[#e2e8f0] border-[1px] border-black p-[1px]"><div className="h-full bg-[#a5b4fc] transition-all duration-500 ease-out" style={{ width: `${player.xp % 100}%` }}></div></div>
             </div>
           )}
         </div>
